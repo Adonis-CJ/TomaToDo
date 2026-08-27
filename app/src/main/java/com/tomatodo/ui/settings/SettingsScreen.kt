@@ -2,12 +2,15 @@ package com.tomatodo.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,20 +21,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatodo.data.model.Subject
@@ -61,12 +74,16 @@ private val subjectColorPresets = listOf(
     0xFF8A857C, 0xFFB08D6A, 0xFF9C5A3C, 0xFF4E6B5A, 0xFF8B6B4A
 )
 
+private fun ringtoneLabel(id: String): String =
+    ringtoneOptions.find { it.first == id }?.second ?: "默认"
+
 private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
     ThemeMode.SYSTEM -> "跟随系统"
     ThemeMode.LIGHT -> "浅色"
     ThemeMode.DARK -> "深色"
 }
 
+/** 设置页（OPTIMIZATION §3.4）：分组卡片化 + 统一行高与控件。 */
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val settings by viewModel.settings.collectAsState()
@@ -85,114 +102,117 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
         Text("设置", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
 
-        // 番茄钟
-        Text("番茄钟", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-        DurationSlider("专注时长", settings.focusMinutes, 5..120, viewModel::setFocus)
-        DurationSlider("短休息", settings.shortBreakMinutes, 1..30, viewModel::setShort)
-        DurationSlider("长休息", settings.longBreakMinutes, 5..60, viewModel::setLong)
-        CountSlider("长休息前番茄数", settings.pomodorosBeforeLongBreak, 1..8, viewModel::setPomodoros)
-
-        Spacer(Modifier.height(32.dp))
-
-        // 提示音
-        Text("提示音", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("铃声", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.weight(1f))
-            Box {
-                OutlinedButton(onClick = { showRingtoneMenu = true }) {
-                    Text(ringtoneOptions.find { it.first == settings.ringtoneId }?.second ?: "默认")
-                }
-                DropdownMenu(
-                    expanded = showRingtoneMenu,
-                    onDismissRequest = { showRingtoneMenu = false }
-                ) {
-                    ringtoneOptions.forEach { (id, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                viewModel.setRingtone(id)
-                                showRingtoneMenu = false
-                            }
-                        )
-                    }
-                }
-            }
+        // ---- 番茄钟 ----
+        SettingsGroup(title = "番茄钟", icon = Icons.Outlined.Timer) {
+            SliderRow(
+                label = "专注时长",
+                valueText = "${settings.focusMinutes} 分钟",
+                value = settings.focusMinutes.toFloat(),
+                valueRange = 5f..120f,
+                steps = 114
+            ) { viewModel.setFocus(it.toInt()) }
+            SliderRow(
+                label = "短休息",
+                valueText = "${settings.shortBreakMinutes} 分钟",
+                value = settings.shortBreakMinutes.toFloat(),
+                valueRange = 1f..30f,
+                steps = 28
+            ) { viewModel.setShort(it.toInt()) }
+            SliderRow(
+                label = "长休息",
+                valueText = "${settings.longBreakMinutes} 分钟",
+                value = settings.longBreakMinutes.toFloat(),
+                valueRange = 5f..60f,
+                steps = 54
+            ) { viewModel.setLong(it.toInt()) }
+            SliderRow(
+                label = "长休息前番茄数",
+                valueText = "${settings.pomodorosBeforeLongBreak} 个",
+                value = settings.pomodorosBeforeLongBreak.toFloat(),
+                valueRange = 1f..8f,
+                steps = 6
+            ) { viewModel.setPomodoros(it.toInt()) }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("音量", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.width(16.dp))
-            Slider(
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 提示音 ----
+        SettingsGroup(title = "提示音", icon = Icons.Outlined.VolumeUp) {
+            MenuRow(
+                label = "铃声",
+                value = ringtoneLabel(settings.ringtoneId),
+                expanded = showRingtoneMenu,
+                onToggleMenu = { showRingtoneMenu = !showRingtoneMenu },
+                onDismiss = { showRingtoneMenu = false },
+                options = ringtoneOptions,
+                onSelect = {
+                    viewModel.setRingtone(it)
+                    showRingtoneMenu = false
+                }
+            )
+            SliderRow(
+                label = "音量",
+                valueText = "${(settings.volume * 100).toInt()}%",
                 value = settings.volume,
-                onValueChange = viewModel::setVolume,
                 valueRange = 0f..1f,
-                modifier = Modifier.weight(1f)
+                steps = 0
+            ) { viewModel.setVolume(it) }
+            SwitchRow(
+                title = "静音 + 仅震动",
+                description = "图书馆安静场合使用",
+                checked = settings.vibrationOnly,
+                onCheckedChange = viewModel::setVibrationOnly
             )
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("静音 + 仅震动", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.weight(1f))
-            Switch(checked = settings.vibrationOnly, onCheckedChange = viewModel::setVibrationOnly)
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 外观 ----
+        SettingsGroup(title = "外观", icon = Icons.Outlined.DarkMode) {
+            ThemePreviewSelector(
+                selected = settings.themeMode,
+                onSelect = viewModel::setThemeMode
+            )
         }
+        Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(32.dp))
-
-        // 主题
-        Text("主题", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemeMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = settings.themeMode == mode,
-                    onClick = { viewModel.setThemeMode(mode) },
-                    label = { Text(themeModeLabel(mode)) }
+        // ---- 科目管理 ----
+        SettingsGroup(title = "科目管理", icon = Icons.Outlined.Label) {
+            subjects.forEach { subject ->
+                SubjectRow(
+                    subject = subject,
+                    onDelete = { viewModel.deleteSubject(subject) }
                 )
             }
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // 科目管理
-        Text("科目管理", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-        subjects.forEach { subject ->
-            SubjectRow(
-                subject = subject,
-                onDelete = { viewModel.deleteSubject(subject) }
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = { showAddSubject = true }) {
-            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("添加科目")
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // 数据备份（ZIP 含图片，导入自动兼容旧 JSON）
-        Text("数据备份", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "导出为 ZIP 包（含卡片图片）；导入自动识别 ZIP / 旧版 JSON",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { exportLauncher.launch("tomatodo_backup.zip") }) {
-                Text("导出备份（ZIP）")
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showAddSubject = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("添加科目")
             }
-            OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
-                Text("导入备份")
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 数据备份 ----
+        SettingsGroup(title = "数据备份", icon = Icons.Outlined.Archive) {
+            Text(
+                "导出为 ZIP 包（含卡片图片）；导入自动识别 ZIP / 旧版 JSON",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = { exportLauncher.launch("tomatodo_backup.zip") },
+                    modifier = Modifier.weight(1f)
+                ) { Text("导出备份") }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("*/*")) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("导入备份") }
             }
         }
         Spacer(Modifier.height(32.dp))
@@ -209,12 +229,254 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     }
 }
 
+// ---- 分组卡片容器 ----
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.height(14.dp))
+            content()
+        }
+    }
+}
+
+// ---- 统一行组件 ----
+
+@Composable
+private fun SliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onChange: (Float) -> Unit
+) {
+    Column(Modifier.padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.weight(1f))
+            Text(
+                valueText,
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = valueRange,
+            steps = steps
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    description: String?,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun MenuRow(
+    label: String,
+    value: String,
+    expanded: Boolean,
+    onToggleMenu: () -> Unit,
+    onDismiss: () -> Unit,
+    options: List<Pair<String, String>>,
+    onSelect: (String) -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onToggleMenu) { Text(value) }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            options.forEach { (id, name) ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = { onSelect(id) }
+                )
+            }
+        }
+    }
+}
+
+/** 主题三选：迷你预览卡（浅色 / 深色 / 跟随系统），选中朱砂描边。 */
+@Composable
+private fun ThemePreviewSelector(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ThemeMode.entries.forEach { mode ->
+            val isSelected = selected == mode
+            Column(
+                Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(mode) }
+                        .border(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(3.dp)
+                ) {
+                    ThemeMiniPreview(mode)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    themeModeLabel(mode),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** 迷你主题预览：模拟一张卡片 + 一条任务 + 朱砂点缀 */
+@Composable
+private fun ThemeMiniPreview(mode: ThemeMode) {
+    val bg = when (mode) {
+        ThemeMode.LIGHT -> Color(0xFFF6F3EC)
+        ThemeMode.DARK -> Color(0xFF1E1C19)
+        ThemeMode.SYSTEM -> Color(0xFFEDE8DD)
+    }
+    val card = when (mode) {
+        ThemeMode.LIGHT -> Color(0xFFFDFCF8)
+        ThemeMode.DARK -> Color(0xFF262421)
+        ThemeMode.SYSTEM -> Color(0xFFFDFCF8)
+    }
+    val line = when (mode) {
+        ThemeMode.LIGHT -> Color(0xFF2B2A26)
+        ThemeMode.DARK -> Color(0xFFEDE8DD)
+        ThemeMode.SYSTEM -> Color(0xFF2B2A26)
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .padding(8.dp)
+    ) {
+        Row {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFB4553A))
+            )
+            Spacer(Modifier.width(4.dp))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(line.copy(alpha = 0.55f))
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(card)
+                .padding(6.dp)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(line.copy(alpha = 0.35f))
+            )
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(line.copy(alpha = 0.2f))
+            )
+        }
+    }
+}
+
 @Composable
 private fun SubjectRow(subject: Subject, onDelete: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .height(44.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -235,10 +497,11 @@ private fun SubjectRow(subject: Subject, onDelete: () -> Unit) {
         }
         Spacer(Modifier.weight(1f))
         if (!subject.isBuiltIn) {
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Outlined.Delete,
                     contentDescription = "删除",
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -267,81 +530,44 @@ private fun AddSubjectDialog(
                 )
                 Spacer(Modifier.height(16.dp))
                 Text("颜色", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    subjectColorPresets.forEach { c ->
-                        val selected = selectedColor == c
-                        Box(
-                            Modifier
-                                .size(if (selected) 32.dp else 28.dp)
-                                .clip(CircleShape)
-                                .background(Color(c))
-                                .clickable { selectedColor = c }
-                        )
+                Spacer(Modifier.height(10.dp))
+                // 5 列色块网格，选中带描边环
+                subjectColorPresets.chunked(5).forEach { rowColors ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        rowColors.forEach { c ->
+                            val isSelected = selectedColor == c
+                            Box(
+                                Modifier
+                                    .size(if (isSelected) 36.dp else 30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(c))
+                                    .clickable { selectedColor = c }
+                                    .then(
+                                        if (isSelected) Modifier.border(
+                                            2.dp,
+                                            MaterialTheme.colorScheme.primary,
+                                            CircleShape
+                                        ) else Modifier
+                                    )
+                            )
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(name, selectedColor) }) { Text("保存") }
+            Button(
+                onClick = { onSave(name, selectedColor) },
+                enabled = name.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) { Text("保存") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
-}
-
-@Composable
-private fun DurationSlider(
-    label: String,
-    value: Int,
-    range: IntRange,
-    onValueChange: (Int) -> Unit
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.weight(1f))
-            Text(
-                "$value 分钟",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = range.last - range.first - 1
-        )
-    }
-}
-
-@Composable
-private fun CountSlider(
-    label: String,
-    value: Int,
-    range: IntRange,
-    onValueChange: (Int) -> Unit
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.weight(1f))
-            Text(
-                "$value 个",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = range.last - range.first - 1
-        )
-    }
 }
