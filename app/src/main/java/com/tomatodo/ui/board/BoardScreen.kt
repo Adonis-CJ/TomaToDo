@@ -70,7 +70,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatodo.data.model.Subject
 import com.tomatodo.data.model.Task
@@ -119,6 +119,14 @@ fun BoardScreen(
     val selectedSubjectId by viewModel.selectedSubjectId.collectAsState()
     val subjectById = remember(subjects) { subjects.associateBy { it.id } }
 
+    // 寄语：自定义（设置）或每日轮换格言
+    val mottoContext = androidx.compose.ui.platform.LocalContext.current
+    val customMotto by remember(mottoContext) {
+        (mottoContext.applicationContext as com.tomatodo.TomaTodoApplication)
+            .container.settingsPreferences.motto
+    }.collectAsState(initial = null)
+    val motto = customMotto?.takeIf { it.isNotBlank() } ?: todayMotto()
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showDatePicker by remember { mutableStateOf(false) }
@@ -151,7 +159,7 @@ fun BoardScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column {
                     Text(titleFor(state.date, state.isToday), style = MaterialTheme.typography.headlineMedium)
@@ -161,6 +169,17 @@ fun BoardScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Spacer(Modifier.width(12.dp))
+                // 寄语：置于标题右下角，Motto: 前缀 + 自定义文字（宋体放大、无卡片背景）
+                Text(
+                    "Motto: $motto",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = com.tomatodo.ui.theme.AppSerif,
+                        fontSize = 17.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
                 Spacer(Modifier.weight(1f))
                 Button(onClick = { sheetTask = null; showCreateSheet = true }) {
                     androidx.compose.material3.Icon(
@@ -182,9 +201,6 @@ fun BoardScreen(
                 onBackToToday = viewModel::backToToday
             )
             Spacer(Modifier.height(8.dp))
-
-            // 语气寄语栏（标题与日期之后展示，宋体衬线）
-            MottoBar()
 
             // 科目筛选行（OPTIMIZATION 收尾）
             if (subjects.isNotEmpty()) {
@@ -310,52 +326,6 @@ fun BoardScreen(
                 sheetTask = null
             }
         )
-    }
-}
-
-/** 看板语气寄语栏：选自定义寄语或每日轮换格言（用户可在设置中自定义寄语） */
-@Composable
-private fun MottoBar() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val customMotto by remember(context) {
-        (context.applicationContext as com.tomatodo.TomaTodoApplication)
-            .container.settingsPreferences.motto
-    }.collectAsState(initial = null)
-    val motto = customMotto?.takeIf { it.isNotBlank() } ?: todayMotto()
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier
-                    .size(width = 3.dp, height = 18.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                motto,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = com.tomatodo.ui.theme.AppSerif
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                "距考研 ${daysToExam()} 天",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
     }
 }
 
