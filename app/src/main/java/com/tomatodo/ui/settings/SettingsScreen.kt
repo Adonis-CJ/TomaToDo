@@ -75,7 +75,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     var showAddSubject by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/zip")
     ) { uri -> uri?.let { viewModel.exportTo(it) } }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -178,14 +178,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 
         Spacer(Modifier.height(32.dp))
 
-        // 数据备份
+        // 数据备份（ZIP 含图片，导入自动兼容旧 JSON）
         Text("数据备份", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "导出为 ZIP 包（含卡片图片）；导入自动识别 ZIP / 旧版 JSON",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { exportLauncher.launch("tomatodo_backup.json") }) {
-                Text("导出备份")
+            OutlinedButton(onClick = { exportLauncher.launch("tomatodo_backup.zip") }) {
+                Text("导出备份（ZIP）")
             }
-            OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
+            OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
                 Text("导入备份")
             }
         }

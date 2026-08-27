@@ -19,7 +19,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val container = (application as TomaTodoApplication).container
     private val prefs = container.settingsPreferences
     private val subjectDao = container.database.subjectDao()
-    private val backupManager = BackupManager(container.database)
+    private val backupManager = BackupManager(container.database, application.filesDir)
 
     val settings: StateFlow<TimerSettings> = prefs.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, TimerSettings())
@@ -47,22 +47,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         if (!subject.isBuiltIn) subjectDao.delete(subject.id)
     }
 
+    /** ZIP 备份导出（含图片文件） */
     fun exportTo(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
         try {
-            val json = backupManager.export()
             getApplication<Application>().contentResolver.openOutputStream(uri)?.use { out ->
-                out.write(json.toByteArray(Charsets.UTF_8))
+                backupManager.exportZip(out)
             }
         } catch (_: Exception) {
             // ignore
         }
     }
 
+    /** 导入：按文件头自动识别 ZIP（新）或纯 JSON（旧） */
     fun importFrom(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
         try {
-            val json = getApplication<Application>().contentResolver.openInputStream(uri)
-                ?.use { it.readBytes().decodeToString() }
-            if (!json.isNullOrBlank()) backupManager.import(json)
+            val bytes = getApplication<Application>().contentResolver.openInputStream(uri)
+                ?.use { it.readBytes() } ?: return@launch
+            val isZip = bytes.size >= 2 &&
+                bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()
+            if (isZip) backupManager.importZip(bytes)
+            else backupManager.import(bytes.decodeToString())
         } catch (_: Exception) {
             // ignore
         }

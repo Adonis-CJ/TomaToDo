@@ -13,9 +13,13 @@ import com.tomatodo.data.model.Task
 import com.tomatodo.data.model.TaskStatus
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
-/** 全量数据导出/导入（JSON，PRD §F7） */
-class BackupManager(private val db: TomaTodoDatabase) {
+/** 全量数据导出/导入（JSON，PRD §F7；v1.1 增加 ZIP 打包含图片，OPTIMIZATION §9 技术债 #4） */
+class BackupManager(
+    private val db: TomaTodoDatabase,
+    private val filesDir: File
+) {
 
     suspend fun export(): String = db.withTransaction {
         val root = JSONObject()
@@ -50,6 +54,45 @@ class BackupManager(private val db: TomaTodoDatabase) {
         cardDao.insertAll(root.optJSONArray("knowledgeCards").parseArray { it.toCard() })
         imageDao.insertAll(root.optJSONArray("cardImages").parseArray { it.toImage() })
         recordDao.insertAll(root.optJSONArray("reviewRecords").parseArray { it.toReviewRecord() })
+    }
+
+    /** ZIP 导出：backup.json + images/ 目录（技术债 #4） */
+    suspend fun exportZip(output: java.io.OutputStream) = db.withTransaction {
+        java.util.zip.ZipOutputStream(java.io.BufferedOutputStream(output)).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("backup.json"))
+            zip.write(export().toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+            db.cardImageDao().getAll().forEach { img ->
+                val file = java.io.File(filesDir, img.filePath)
+                if (file.exists()) {
+                    zip.putNextEntry(java.util.zip.ZipEntry(img.filePath))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+    }
+
+    /** ZIP 导入：还原 JSON 数据并恢复图片文件（须为 exportZip 的产物） */
+    suspend fun importZip(bytes: ByteArray) {
+        var jsonText: String? = null
+        val images = mutableListOf<Pair<String, ByteArray>>()
+        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                when {
+                    entry.name == "backup.json" -> jsonText = zip.readBytes().decodeToString()
+                    entry.name.startsWith("images/") -> images += entry.name to zip.readBytes()
+                }
+                entry = zip.nextEntry
+            }
+        }
+        jsonText?.let { import(it) }
+        images.forEach { (path, bytes) ->
+            val target = java.io.File(filesDir, path)
+            target.parentFile?.mkdirs()
+            target.writeBytes(bytes)
+        }
     }
 }
 
