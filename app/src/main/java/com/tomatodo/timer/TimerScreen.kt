@@ -27,11 +27,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatodo.data.model.PomodoroType
+import com.tomatodo.ui.theme.AppMono
 
 @Composable
 fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
@@ -99,7 +99,7 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 Text(
                     formatCountdown(state.remainingMillis),
                     fontSize = 64.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppMono,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(

@@ -57,11 +57,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatodo.data.model.Subject
 import com.tomatodo.data.preferences.ThemeMode
+import com.tomatodo.ui.theme.AppMono
 
 private val ringtoneOptions = listOf(
     "default" to "默认",
@@ -285,7 +285,7 @@ private fun SliderRow(
             Text(
                 valueText,
                 style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppMono,
                 color = MaterialTheme.colorScheme.primary
             )
         }
