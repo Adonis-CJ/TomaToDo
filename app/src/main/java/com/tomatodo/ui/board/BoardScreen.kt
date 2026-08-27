@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -570,53 +569,9 @@ private fun BoardColumn(
                             }
                         }
                     }
-                    // 可见滚动条：Box 内的兄弟节点（LazyColumn 之外）
-                    ListScrollBar(
-                        state = listState,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
-                    )
                 }
             }
         }
-    }
-}
-
-/** 自绘细滚动条：任务多可滚动时显示，thumb 随滚动位置移动 */
-@Composable
-private fun ListScrollBar(state: LazyListState, modifier: Modifier = Modifier) {
-    val layoutInfo = state.layoutInfo
-    val total = layoutInfo.totalItemsCount
-    val canScroll = state.canScrollBackward || state.canScrollForward
-    if (total <= 0 || !canScroll) return
-    val minThumb = with(androidx.compose.ui.platform.LocalDensity.current) { 36.dp.toPx() }
-
-    val viewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).coerceAtLeast(1)
-    val visibleCount = layoutInfo.visibleItemsInfo.size.coerceAtLeast(1)
-    val thumbHeightPx = (viewport * visibleCount.toFloat() / total).coerceIn(minThumb, viewport.toFloat())
-    val thumbMaxTop = viewport - thumbHeightPx
-    // 按首项位置估算滚动进度（0..1）
-    val first = state.firstVisibleItemIndex.toFloat() +
-        state.firstVisibleItemScrollOffset / (layoutInfo.visibleItemsInfo.firstOrNull()?.size?.coerceAtLeast(1)?.toFloat() ?: 1f)
-    val progress = (first / total).coerceIn(0f, 1f)
-    val thumbTop = thumbMaxTop * progress
-    // 颜色在 Canvas 之外取值（MaterialTheme 是 @Composable，不可在 DrawScope 内调用）
-    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-    val thumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-
-    Canvas(modifier) {
-        // 轨道
-        drawRoundRect(
-            color = trackColor,
-            topLeft = androidx.compose.ui.geometry.Offset(size.width - 4.dp.toPx(), 0f),
-            size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)
-        )
-        // thumb
-        drawRoundRect(
-            color = thumbColor,
-            topLeft = androidx.compose.ui.geometry.Offset(size.width - 6.dp.toPx(), thumbTop),
-            size = androidx.compose.ui.geometry.Size(6.dp.toPx(), thumbHeightPx),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
-        )
     }
 }
 
