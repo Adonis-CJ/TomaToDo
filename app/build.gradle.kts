@@ -48,5 +48,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
 
+    // 图片加载
+    implementation(libs.coil.compose)
+
     debugImplementation(libs.androidx.ui.tooling)
 }

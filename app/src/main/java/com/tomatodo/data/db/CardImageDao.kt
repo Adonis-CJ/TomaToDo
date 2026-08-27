@@ -11,6 +11,9 @@ interface CardImageDao {
     @Query("SELECT * FROM card_images WHERE cardId = :cardId ORDER BY sortOrder")
     fun observeForCard(cardId: Long): Flow<List<CardImage>>
 
+    @Query("SELECT * FROM card_images ORDER BY sortOrder")
+    fun observeAllImages(): Flow<List<CardImage>>
+
     @Insert
     suspend fun insertAll(images: List<CardImage>)
 

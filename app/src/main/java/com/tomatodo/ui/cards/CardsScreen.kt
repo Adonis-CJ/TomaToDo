@@ -2,6 +2,10 @@
 
 package com.tomatodo.ui.cards
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +20,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,12 +57,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.tomatodo.data.model.CardType
 import com.tomatodo.data.model.KnowledgeCard
 import com.tomatodo.data.model.Subject
+import java.io.File
 
 private fun cardTypeLabel(type: CardType): String = when (type) {
     CardType.MISTAKE -> "错题"
@@ -63,6 +76,7 @@ private fun cardTypeLabel(type: CardType): String = when (type) {
 fun CardsScreen(viewModel: CardsViewModel = viewModel()) {
     val cards by viewModel.cards.collectAsState()
     val subjects by viewModel.subjects.collectAsState()
+    val imagesByCard by viewModel.imagesByCard.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
     var flipped by remember { mutableStateOf(setOf<Long>()) }
 
@@ -95,6 +109,9 @@ fun CardsScreen(viewModel: CardsViewModel = viewModel()) {
                 KnowledgeCardItem(
                     card = card,
                     subject = subjectById[card.subjectId],
+                    imageFiles = imagesByCard[card.id]
+                        ?.map { viewModel.imageFile(it.filePath) }
+                        .orEmpty(),
                     flipped = card.id in flipped,
                     onClick = { flipped = if (card.id in flipped) flipped - card.id else flipped + card.id },
                     onDelete = { viewModel.deleteCard(card) }
@@ -106,9 +123,10 @@ fun CardsScreen(viewModel: CardsViewModel = viewModel()) {
     if (showAddSheet) {
         AddCardSheet(
             subjects = subjects,
+            viewModel = viewModel,
             onDismiss = { showAddSheet = false },
-            onSave = { front, back, subjectId, type, source ->
-                viewModel.addCard(front, back, subjectId, type, source)
+            onSave = { front, back, subjectId, type, source, pending ->
+                viewModel.addCard(front, back, subjectId, type, source, pending)
                 showAddSheet = false
             }
         )
@@ -119,6 +137,7 @@ fun CardsScreen(viewModel: CardsViewModel = viewModel()) {
 private fun KnowledgeCardItem(
     card: KnowledgeCard,
     subject: Subject?,
+    imageFiles: List<File>,
     flipped: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit
@@ -170,6 +189,24 @@ private fun KnowledgeCardItem(
                 overflow = TextOverflow.Ellipsis,
                 color = if (flipped) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
             )
+            if (imageFiles.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    imageFiles.take(3).forEach { file ->
+                        AsyncImage(
+                            model = file,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(96.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -177,8 +214,9 @@ private fun KnowledgeCardItem(
 @Composable
 private fun AddCardSheet(
     subjects: List<Subject>,
+    viewModel: CardsViewModel,
     onDismiss: () -> Unit,
-    onSave: (front: String, back: String, subjectId: Long?, type: CardType, source: String?) -> Unit
+    onSave: (front: String, back: String, subjectId: Long?, type: CardType, source: String?, List<PendingImage>) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
     var front by remember { mutableStateOf("") }
@@ -188,6 +226,30 @@ private fun AddCardSheet(
     var type by remember { mutableStateOf(CardType.KNOWLEDGE) }
     var showSubjectMenu by remember { mutableStateOf(false) }
     var showTypeMenu by remember { mutableStateOf(false) }
+    var pendingImages by remember { mutableStateOf(listOf<PendingImage>()) }
+    var pendingCameraPath by remember { mutableStateOf<String?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        val path = pendingCameraPath
+        if (success && path != null) {
+            // 拍照已直接写入最终位置，无需拷贝
+            pendingImages = pendingImages + PendingImage(
+                uri = Uri.EMPTY, relativePath = path, needsCopy = false
+            )
+        }
+        pendingCameraPath = null
+    }
+    val pickLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            pendingImages = pendingImages + PendingImage(
+                uri = it, relativePath = null, needsCopy = true
+            )
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -256,13 +318,83 @@ private fun AddCardSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(16.dp))
+
+            // 图片：拍照 / 选图 + 预览
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val (uri, path) = viewModel.newCameraImage()
+                    pendingCameraPath = path
+                    cameraLauncher.launch(uri)
+                }) {
+                    Icon(
+                        Icons.Outlined.PhotoCamera,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("拍照")
+                }
+                OutlinedButton(onClick = {
+                    pickLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }) {
+                    Icon(
+                        Icons.Outlined.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("选图")
+                }
+            }
+            if (pendingImages.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(pendingImages.size) { index ->
+                        val pending = pendingImages[index]
+                        Box {
+                            AsyncImage(
+                                model = if (pending.needsCopy) pending.uri
+                                else viewModel.imageFile(pending.relativePath!!),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                                    .clickable {
+                                        pendingImages = pendingImages.toMutableList()
+                                            .apply { removeAt(index) }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Close,
+                                    contentDescription = "移除图片",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("取消") }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = {
-                    onSave(front, back, selectedSubjectId, type, source)
+                    onSave(front, back, selectedSubjectId, type, source, pendingImages)
                 }) { Text("保存") }
             }
         }
