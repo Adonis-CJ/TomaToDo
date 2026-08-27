@@ -87,6 +87,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val monthDayFormatter = DateTimeFormatter.ofPattern("M月d日")
@@ -581,6 +582,9 @@ private fun TaskEditSheet(
     var showTimePicker by remember { mutableStateOf(false) }
     var pickingEnd by remember { mutableStateOf(true) }
     var showSubjectMenu by remember { mutableStateOf(false) }
+    // 结束时间：先选日期再选时分（跨天任务）
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    var endDateMillis by remember { mutableStateOf<Long?>(null) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -604,9 +608,9 @@ private fun TaskEditSheet(
             )
             Spacer(Modifier.height(16.dp))
 
-            TimeRow("开始时间", startTime) { pickingEnd = false; showTimePicker = true }
+            TimeRow("开始时间", startTime, withDate = false) { pickingEnd = false; showTimePicker = true }
             Spacer(Modifier.height(4.dp))
-            TimeRow("结束时间", endTime) { pickingEnd = true; showTimePicker = true }
+            TimeRow("结束时间", endTime, withDate = true) { showEndDatePicker = true }
             Spacer(Modifier.height(12.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -662,24 +666,61 @@ private fun TaskEditSheet(
             text = { TimePicker(state = timeState) },
             confirmButton = {
                 TextButton(onClick = {
-                    val base = Instant.ofEpochMilli(initialEpoch).atZone(zoneId)
-                    val result = base.toLocalDate()
+                    // 结束时间：用 DatePicker 所选日期（若有）+ 此时分合成
+                    val baseDate = if (pickingEnd && endDateMillis != null) {
+                        Instant.ofEpochMilli(endDateMillis!!).atZone(ZoneOffset.UTC).toLocalDate()
+                    } else {
+                        Instant.ofEpochMilli(initialEpoch).atZone(zoneId).toLocalDate()
+                    }
+                    val result = baseDate
                         .atTime(timeState.hour, timeState.minute)
                         .atZone(zoneId)
                         .toInstant()
                         .toEpochMilli()
                     if (pickingEnd) endTime = result else startTime = result
+                    endDateMillis = null
                     showTimePicker = false
                 }) { Text("确定") }
             },
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("取消") } }
         )
     }
+
+    // 结束日期选择（DatePicker）：选完日期后转入 TimePicker
+    if (showEndDatePicker) {
+        val endLocalDate = Instant.ofEpochMilli(endTime).atZone(zone).toLocalDate()
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = endLocalDate
+                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val sel = datePickerState.selectedDateMillis
+                    if (sel != null) {
+                        endDateMillis = sel
+                        // 选完日期接着选时分
+                        showEndDatePicker = false
+                        pickingEnd = true
+                        showTimePicker = true
+                    } else {
+                        showEndDatePicker = false
+                    }
+                }) { Text("下一步") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = datePickerState, showModeToggle = true)
+        }
+    }
 }
 
 @Composable
-private fun TimeRow(label: String, epoch: Long, onClick: () -> Unit) {
-    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+private fun TimeRow(label: String, epoch: Long, withDate: Boolean, onClick: () -> Unit) {
+    val formatter = DateTimeFormatter.ofPattern(if (withDate) "M月d日 HH:mm" else "HH:mm")
     Row(
         Modifier
             .fillMaxWidth()
