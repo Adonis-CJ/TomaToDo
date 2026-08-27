@@ -14,6 +14,9 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     val state = TimerController.state
     val events = TimerController.events
 
+    /** 悬浮窗权限缺失（OPTIMIZATION 技术债 #6）：置位后由 UI 弹引导 */
+    val needOverlayPermission = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     init {
         viewModelScope.launch {
             prefs.settings.collect { s ->
@@ -31,7 +34,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun startForTask(taskId: Long) {
         TimerController.start(taskId)
         TimerService.start(getApplication())
-        FloatingWindowManager.show(getApplication())
+        tryShowFloatingWindow()
         viewModelScope.launch {
             taskDao.updateStatus(taskId, TaskStatus.DOING, false, System.currentTimeMillis())
         }
@@ -40,7 +43,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun start() {
         TimerController.start()
         TimerService.start(getApplication())
-        FloatingWindowManager.show(getApplication())
+        tryShowFloatingWindow()
+    }
+
+    private fun tryShowFloatingWindow() {
+        if (android.provider.Settings.canDrawOverlays(getApplication())) {
+            FloatingWindowManager.show(getApplication())
+        } else {
+            needOverlayPermission.value = true
+        }
     }
 
     fun pause() = TimerController.pause()

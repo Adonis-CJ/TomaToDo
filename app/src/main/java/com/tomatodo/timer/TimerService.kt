@@ -7,7 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.RingtoneManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.IBinder
 import android.os.VibrationEffect
@@ -23,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** 前台服务：后台计时 + 常驻通知 + 完成提示音/震动 */
@@ -51,7 +54,7 @@ class TimerService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var vibrationOnly = false
+    private var settings = com.tomatodo.data.preferences.TimerSettings()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -60,13 +63,17 @@ class TimerService : Service() {
         createChannel()
         scope.launch {
             (application as com.tomatodo.TomaTodoApplication).container
-                .settingsPreferences.settings.collect { s -> vibrationOnly = s.vibrationOnly }
+                .settingsPreferences.settings.collect { s -> settings = s }
         }
         scope.launch {
-            TimerController.state.collect { state ->
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(NOTIFICATION_ID, buildNotification(state))
-            }
+            // 通知降频至 1Hz（OPTIMIZATION 技术债 #10）：仅秒数/阶段/运行态变化时刷新
+            TimerController.state
+                .map { Triple(it.phase, it.isRunning, it.remainingMillis / 1000L) }
+                .distinctUntilChanged()
+                .collect { (_, _, _) ->
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.notify(NOTIFICATION_ID, buildNotification(TimerController.state.value))
+                }
         }
         scope.launch {
             TimerController.events.collect { event ->
@@ -154,15 +161,25 @@ class TimerService : Service() {
 
     private fun playCompletion() {
         vibrate()
-        if (vibrationOnly) return // 静音 + 仅震动
-        // MVP：播放系统默认提示音（自定义铃声/音量后续细化）
+        if (settings.vibrationOnly) return // 静音 + 仅震动
+        // 铃声生效（OPTIMIZATION 技术债 #1）：ringtoneId 映射音色，volume 独立控制
         try {
-            RingtoneManager.getRingtone(
-                this,
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            )?.play()
+            val toneGen = ToneGenerator(
+                AudioManager.STREAM_MUSIC,
+                (settings.volume * 100).toInt().coerceIn(0, 100)
+            )
+            val tone = when (settings.ringtoneId) {
+                "gentle" -> ToneGenerator.TONE_PROP_BEEP      // 轻柔：短促一声
+                "crisp" -> ToneGenerator.TONE_CDMA_PIP        // 清脆：高频短音
+                else -> ToneGenerator.TONE_PROP_BEEP2         // 默认：双音
+            }
+            toneGen.startTone(tone, if (settings.ringtoneId == "default") 400 else 200)
+            scope.launch {
+                kotlinx.coroutines.delay(800)
+                runCatching { toneGen.release() }
+            }
         } catch (_: Exception) {
-            // ignore
+            // 忽略音频设备异常
         }
     }
 

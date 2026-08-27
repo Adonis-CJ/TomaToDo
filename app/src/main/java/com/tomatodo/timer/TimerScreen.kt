@@ -36,10 +36,39 @@ import com.tomatodo.data.model.PomodoroType
 @Composable
 fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    val needOverlay by viewModel.needOverlayPermission.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val progress = if (state.totalMillis > 0L) {
         state.remainingMillis.toFloat() / state.totalMillis.toFloat()
     } else {
         1f
+    }
+
+    // 悬浮窗权限引导（OPTIMIZATION 技术债 #6）
+    if (needOverlay) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.needOverlayPermission.value = false },
+            title = { Text("开启悬浮窗？") },
+            text = { Text("开启「显示在其他应用上层」权限后，可以在刷题、看笔记时通过小浮窗查看和控制番茄钟。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    viewModel.needOverlayPermission.value = false
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:${context.packageName}")
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }) { Text("去开启") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { viewModel.needOverlayPermission.value = false }
+                ) { Text("暂不") }
+            }
+        )
     }
 
     Column(
