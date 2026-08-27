@@ -54,6 +54,8 @@ fun MainScreen() {
     // 轻量路由：卡片撰写页（null = 关闭；cardId 为 null 表示新建）
     var editingCardId by remember { mutableStateOf<Long?>(null) }
     var editorOpen by remember { mutableStateOf(false) }
+    // 番茄钟 ViewModel 提升至 MainScreen，看板可一键启动
+    val timerViewModel: com.tomatodo.timer.TimerViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
     AnimatedContent(
         targetState = editorOpen,
@@ -86,8 +88,13 @@ fun MainScreen() {
                 VerticalDivider()
                 // 内容区
                 when (selected) {
-                    Destination.Board -> BoardScreen()
-                    Destination.Timer -> TimerScreen()
+                    Destination.Board -> BoardScreen(
+                        onStartPomodoro = { task ->
+                            timerViewModel.startForTask(task.id)
+                            selected = Destination.Timer
+                        }
+                    )
+                    Destination.Timer -> TimerScreen(timerViewModel)
                     Destination.Review -> ReviewScreen()
                     Destination.Cards -> CardsScreen(
                         onEditCard = { id ->

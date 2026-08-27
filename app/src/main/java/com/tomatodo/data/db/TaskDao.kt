@@ -13,6 +13,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY startTime")
     fun observeAll(): Flow<List<Task>>
 
+    @Query("SELECT * FROM tasks WHERE startTime >= :from AND startTime < :to ORDER BY startTime")
+    fun observeByDate(from: Long, to: Long): Flow<List<Task>>
+
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun getById(id: Long): Task?
 
