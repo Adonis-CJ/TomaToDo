@@ -21,6 +21,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     /** 换绑当前任务 */
     fun bindTask(taskId: Long?) = TimerController.bindTask(taskId)
 
+    /** 切换沉浸模式（番茄页内直接切换翻页钟 / 背景图时钟） */
+    fun setImmersionMode(mode: com.tomatodo.data.preferences.ImmersionMode) =
+        viewModelScope.launch { prefs.setImmersionMode(mode) }
+
     /** 设置（沉浸模式 / 壁纸等），供计时页读取 */
     val settings = prefs.settings.stateIn(
         viewModelScope,

@@ -162,6 +162,8 @@ fun TimerScreen(
             progress = progress,
             tasks = viewModel.activeTasks.collectAsState(initial = emptyList()).value,
             onBindTask = viewModel::bindTask,
+            immersionMode = settings.immersionMode,
+            onSetImmersion = viewModel::setImmersionMode,
             onStart = viewModel::start,
             onPause = viewModel::pause,
             onReset = viewModel::reset,
@@ -179,6 +181,8 @@ private fun NormalTimerContent(
     progress: Float,
     tasks: List<com.tomatodo.data.model.Task>,
     onBindTask: (Long?) -> Unit,
+    immersionMode: ImmersionMode,
+    onSetImmersion: (ImmersionMode) -> Unit,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onReset: () -> Unit,
@@ -266,13 +270,34 @@ private fun NormalTimerContent(
         }
 
         Spacer(Modifier.height(24.dp))
-        // 沉浸模式快捷入口
-        FilledTonalButton(onClick = onImmersive, enabled = state.isRunning) {
-            Icon(
-                Icons.Outlined.CloseFullscreen,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
+        // 沉浸模式切换 + 入口（番茄页内可直接选翻页钟 / 背景图时钟）
+        Row(
+            Modifier.height(40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ImmersionModeChip(
+                selected = immersionMode == ImmersionMode.FLIP,
+                label = "翻页钟",
+                onClick = { onSetImmersion(ImmersionMode.FLIP) }
             )
+            ImmersionModeChip(
+                selected = immersionMode == ImmersionMode.PHOTO,
+                label = "背景图",
+                onClick = { onSetImmersion(ImmersionMode.PHOTO) }
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onImmersive,
+            enabled = state.isRunning,
+            modifier = Modifier.height(44.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        ) {
+            Icon(Icons.Outlined.CloseFullscreen, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text("进入沉浸模式")
         }
@@ -470,6 +495,28 @@ private fun PomodoroDots(completed: Int) {
                     )
             )
         }
+    }
+}
+
+@Composable
+private fun ImmersionModeChip(selected: Boolean, label: String, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = when {
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.surface
+        },
+        border = if (selected) null
+        else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+        )
     }
 }
 

@@ -157,18 +157,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onSelect = { viewModel.setImmersionMode(com.tomatodo.data.preferences.ImmersionMode.FLIP) },
                     modifier = Modifier.weight(1f)
                 ) {
-                    // 迷你预览：黑底双卡
+                    // 迷你预览：4 张翻页卡（与真实翻页钟一致的分离黑卡）
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF0E0E11))
-                            .padding(vertical = 14.dp),
+                            .background(Color(0xFF050506))
+                            .padding(vertical = 16.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MiniFlipCard("25")
+                        MiniFlipCard("2")
+                        MiniFlipCard("5")
                         MiniFlipColon()
-                        MiniFlipCard("00")
+                        MiniFlipCard("0")
+                        MiniFlipCard("0")
                     }
                 }
                 ImmersionPreviewCard(
@@ -180,8 +182,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF2B2A26))
-                            .padding(vertical = 8.dp),
+                            .background(Color(0xFF2B2A26)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (settings.wallpaperPath != null) {
@@ -189,14 +190,21 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                                 model = java.io.File(context.filesDir, settings.wallpaperPath),
                                 contentDescription = null,
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                modifier = Modifier.fillMaxWidth().height(54.dp)
+                                modifier = Modifier.fillMaxWidth().height(96.dp)
+                            )
+                            // 中央时钟遮罩
+                            Text(
+                                "25:00",
+                                fontFamily = AppMono,
+                                color = Color.White,
+                                modifier = Modifier.padding(vertical = 16.dp)
                             )
                         } else {
                             Text(
                                 "25:00",
                                 fontFamily = AppMono,
                                 color = Color.White,
-                                modifier = Modifier.padding(vertical = 14.dp)
+                                modifier = Modifier.padding(vertical = 36.dp)
                             )
                         }
                     }
@@ -619,15 +627,16 @@ private fun ImmersionPreviewCard(
 private fun MiniFlipCard(text: String) {
     Box(
         Modifier
-            .width(28.dp)
-            .height(38.dp)
-            .background(Color(0xFF1C1C20), RoundedCornerShape(4.dp)),
+            .width(34.dp)
+            .height(64.dp)
+            .background(Color(0xFF161618), RoundedCornerShape(6.dp))
+            .border(1.dp, Color(0xFF2A2A2E), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text,
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
+            color = Color(0xFFF5F2EC),
+            style = MaterialTheme.typography.titleLarge,
             fontFamily = AppMono
         )
     }
@@ -635,12 +644,22 @@ private fun MiniFlipCard(text: String) {
 
 @Composable
 private fun MiniFlipColon() {
-    Text(
-        ":",
-        color = Color(0xFF3A3A40),
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 3.dp)
-    )
+    Column(
+        Modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .size(6.dp)
+                .background(Color(0xFF4A4A50), CircleShape)
+        )
+        Box(Modifier.height(12.dp))
+        Box(
+            Modifier
+                .size(6.dp)
+                .background(Color(0xFF4A4A50), CircleShape)
+        )
+    }
 }
 
 @Composable
