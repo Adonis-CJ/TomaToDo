@@ -173,10 +173,6 @@ fun BoardScreen(
                 }
             }
 
-            // 语气寄语栏（每日一句格言）
-            MottoBar()
-            Spacer(Modifier.height(8.dp))
-
             // 日期导航条（← 日期 → + DatePicker + 回到今天）
             DateNavBar(
                 date = state.date,
@@ -185,6 +181,10 @@ fun BoardScreen(
                 onPickDate = { showDatePicker = true },
                 onBackToToday = viewModel::backToToday
             )
+            Spacer(Modifier.height(8.dp))
+
+            // 语气寄语栏（标题与日期之后展示，宋体衬线）
+            MottoBar()
 
             // 科目筛选行（OPTIMIZATION 收尾）
             if (subjects.isNotEmpty()) {
@@ -343,7 +343,9 @@ private fun MottoBar() {
             Spacer(Modifier.width(12.dp))
             Text(
                 motto,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = com.tomatodo.ui.theme.AppSerif
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2
             )
@@ -559,9 +561,11 @@ private fun BoardColumn(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 backgroundContent = {
+                                    // 与任务卡同款 16dp 圆角，避免露出直角"尖角矩形"
                                     Row(
                                         Modifier
                                             .fillMaxSize()
+                                            .clip(RoundedCornerShape(16.dp))
                                             .background(MaterialTheme.colorScheme.errorContainer),
                                         horizontalArrangement = Arrangement.End,
                                         verticalAlignment = Alignment.CenterVertically
