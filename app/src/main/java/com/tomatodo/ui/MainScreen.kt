@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.tomatodo.ui.board.BoardScreen
 
 /** 主导航目的地（图标为 Material Symbols 线性 SVG，非 emoji） */
 enum class Destination(val label: String, val icon: ImageVector) {
@@ -56,15 +57,23 @@ fun MainScreen() {
             Spacer(Modifier.weight(1f))
         }
         VerticalDivider()
-        // 内容区（占位，后续替换为各功能屏）
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = selected.label,
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+        // 内容区
+        when (selected) {
+            Destination.Board -> BoardScreen()
+            else -> Placeholder(selected.label)
+        }
+    }
+}
+
+@Composable
+private fun Placeholder(label: String) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
         }
     }
 }
