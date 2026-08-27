@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,8 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -484,6 +487,7 @@ private fun BoardColumn(
     modifier: Modifier = Modifier
 ) {
     val columnTasks = tasks.filter { it.status == status }
+    val listState = rememberLazyListState()
     // 列底用深一档的 surfaceVariant，衬出纸白任务卡（避免卡片与底色融合）
     Surface(
         modifier = modifier,
@@ -511,59 +515,108 @@ private fun BoardColumn(
             if (columnTasks.isEmpty()) {
                 EmptyColumnHint()
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp)
-                ) {
-                    items(columnTasks, key = { it.id }) { task ->
-                        val dismissState = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { value ->
-                                if (value == SwipeToDismissBoxValue.EndToStart) {
-                                    onDelete(task)
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                        )
-                        Box(Modifier.animateItem()) {
-                            SwipeToDismissBox(
-                                state = dismissState,
-                                enableDismissFromStartToEnd = false,
-                                backgroundContent = {
-                                    // 与任务卡同款 16dp 圆角，避免露出直角"尖角矩形"
-                                    Row(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(MaterialTheme.colorScheme.errorContainer),
-                                        horizontalArrangement = Arrangement.End,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            "删除",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                            modifier = Modifier.padding(horizontal = 20.dp)
-                                        )
+                // weight(1f) 占满列内剩余高度，让列表可内部滚动；右侧叠加可见滚动条
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(top = 2.dp, bottom = 8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(columnTasks, key = { it.id }) { task ->
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        onDelete(task)
+                                        true
+                                    } else {
+                                        false
                                     }
                                 }
-                            ) {
-                                TaskCard(
-                                    task = task,
-                                    subject = subjectById[task.subjectId],
-                                    readOnly = readOnly,
-                                    onToggle = { onToggle(task) },
-                                    onEdit = { onEdit(task) },
-                                    onStartPomodoro = if (status == TaskStatus.DONE) null
-                                        else onStart?.let { handler -> { handler(task) } }
-                                )
+                            )
+                            Box(Modifier.animateItem()) {
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    enableDismissFromStartToEnd = false,
+                                    backgroundContent = {
+                                        // 与任务卡同款 16dp 圆角，避免露出直角"尖角矩形"
+                                        Row(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(MaterialTheme.colorScheme.errorContainer),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "删除",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.padding(horizontal = 20.dp)
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    TaskCard(
+                                        task = task,
+                                        subject = subjectById[task.subjectId],
+                                        readOnly = readOnly,
+                                        onToggle = { onToggle(task) },
+                                        onEdit = { onEdit(task) },
+                                        onStartPomodoro = if (status == TaskStatus.DONE) null
+                                            else onStart?.let { handler -> { handler(task) } }
+                                    )
+                                }
                             }
                         }
                     }
+                    // 可见滚动条：Box 内的兄弟节点（LazyColumn 之外）
+                    ListScrollBar(
+                        state = listState,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
+                    )
                 }
             }
         }
+    }
+}
+
+/** 自绘细滚动条：任务多可滚动时显示，thumb 随滚动位置移动 */
+@Composable
+private fun ListScrollBar(state: LazyListState, modifier: Modifier = Modifier) {
+    val layoutInfo = state.layoutInfo
+    val total = layoutInfo.totalItemsCount
+    val canScroll = state.canScrollBackward || state.canScrollForward
+    if (total <= 0 || !canScroll) return
+    val minThumb = with(androidx.compose.ui.platform.LocalDensity.current) { 36.dp.toPx() }
+
+    val viewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).coerceAtLeast(1)
+    val visibleCount = layoutInfo.visibleItemsInfo.size.coerceAtLeast(1)
+    val thumbHeightPx = (viewport * visibleCount.toFloat() / total).coerceIn(minThumb, viewport.toFloat())
+    val thumbMaxTop = viewport - thumbHeightPx
+    // 按首项位置估算滚动进度（0..1）
+    val first = state.firstVisibleItemIndex.toFloat() +
+        state.firstVisibleItemScrollOffset / (layoutInfo.visibleItemsInfo.firstOrNull()?.size?.coerceAtLeast(1)?.toFloat() ?: 1f)
+    val progress = (first / total).coerceIn(0f, 1f)
+    val thumbTop = thumbMaxTop * progress
+    // 颜色在 Canvas 之外取值（MaterialTheme 是 @Composable，不可在 DrawScope 内调用）
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+    val thumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+
+    Canvas(modifier) {
+        // 轨道
+        drawRoundRect(
+            color = trackColor,
+            topLeft = androidx.compose.ui.geometry.Offset(size.width - 4.dp.toPx(), 0f),
+            size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)
+        )
+        // thumb
+        drawRoundRect(
+            color = thumbColor,
+            topLeft = androidx.compose.ui.geometry.Offset(size.width - 6.dp.toPx(), thumbTop),
+            size = androidx.compose.ui.geometry.Size(6.dp.toPx(), thumbHeightPx),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+        )
     }
 }
 
