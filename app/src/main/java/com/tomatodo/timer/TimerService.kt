@@ -135,10 +135,14 @@ class TimerService : Service() {
     }
 
     private suspend fun recordFocusSession(event: TimerController.TimerEvent.PhaseCompleted) {
-        val dao = (application as TomaTodoApplication).container.database.pomodoroSessionDao()
-        dao.insert(
+        val db = (application as TomaTodoApplication).container.database
+        val taskId = TimerController.state.value.taskId
+        // 从关联任务快照科目，供统计页做科目时间分布
+        val subjectId = taskId?.let { id -> db.taskDao().getById(id)?.subjectId }
+        db.pomodoroSessionDao().insert(
             PomodoroSession(
-                taskId = TimerController.state.value.taskId,
+                taskId = taskId,
+                subjectId = subjectId,
                 type = PomodoroType.FOCUS,
                 startAt = event.startAt,
                 endAt = event.endAt,

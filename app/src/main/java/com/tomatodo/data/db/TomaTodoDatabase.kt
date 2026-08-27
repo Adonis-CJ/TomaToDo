@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import com.tomatodo.data.model.CardImage
 import com.tomatodo.data.model.KnowledgeCard
 import com.tomatodo.data.model.PomodoroSession
+import com.tomatodo.data.model.ReviewRecord
 import com.tomatodo.data.model.Subject
 import com.tomatodo.data.model.Task
 
@@ -15,10 +16,11 @@ import com.tomatodo.data.model.Task
         Task::class,
         PomodoroSession::class,
         KnowledgeCard::class,
-        CardImage::class
+        CardImage::class,
+        ReviewRecord::class
     ],
-    version = 1,
-    exportSchema = false
+    version = 2,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class TomaTodoDatabase : RoomDatabase() {
@@ -27,4 +29,5 @@ abstract class TomaTodoDatabase : RoomDatabase() {
     abstract fun pomodoroSessionDao(): PomodoroSessionDao
     abstract fun knowledgeCardDao(): KnowledgeCardDao
     abstract fun cardImageDao(): CardImageDao
+    abstract fun reviewRecordDao(): ReviewRecordDao
 }

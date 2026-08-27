@@ -7,6 +7,7 @@ import com.tomatodo.TomaTodoApplication
 import com.tomatodo.data.ReviewResult
 import com.tomatodo.data.computeReviewOutcome
 import com.tomatodo.data.model.KnowledgeCard
+import com.tomatodo.data.model.ReviewRecord
 import com.tomatodo.data.model.Subject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
     private val db = (application as TomaTodoApplication).container.database
     private val cardDao = db.knowledgeCardDao()
     private val subjectDao = db.subjectDao()
+    private val recordDao = db.reviewRecordDao()
 
     val dueCards: StateFlow<List<KnowledgeCard>> = cardDao.observeDue(System.currentTimeMillis())
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -34,6 +36,9 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
                 ReviewResult.FORGET -> 0
             }
             cardDao.updateReview(card.id, mastery, outcome.newReviewCount, outcome.nextReviewAt, now)
+            recordDao.insert(
+                ReviewRecord(cardId = card.id, result = result.name, reviewedAt = now)
+            )
         }
     }
 }

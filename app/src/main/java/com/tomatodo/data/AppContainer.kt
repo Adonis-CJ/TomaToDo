@@ -2,6 +2,7 @@ package com.tomatodo.data
 
 import android.content.Context
 import androidx.room.Room
+import com.tomatodo.data.db.DatabaseMigrations
 import com.tomatodo.data.db.TomaTodoDatabase
 import com.tomatodo.data.preferences.SettingsPreferences
 
@@ -10,7 +11,9 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val database: TomaTodoDatabase by lazy {
-        Room.databaseBuilder(appContext, TomaTodoDatabase::class.java, "tomatodo.db").build()
+        Room.databaseBuilder(appContext, TomaTodoDatabase::class.java, "tomatodo.db")
+            .addMigrations(*DatabaseMigrations.ALL)
+            .build()
     }
 
     val settingsPreferences: SettingsPreferences by lazy {

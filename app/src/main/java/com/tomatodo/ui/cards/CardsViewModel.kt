@@ -75,7 +75,8 @@ class CardsViewModel(application: Application) : AndroidViewModel(application) {
                     masteryLevel = 0,
                     reviewCount = 0,
                     nextReviewAt = now,
-                    createdAt = now
+                    createdAt = now,
+                    updatedAt = now
                 )
             )
             val entities = pendingImages.mapIndexedNotNull { index, pending ->
