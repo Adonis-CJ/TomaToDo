@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.tomatodo.ui.board.BoardScreen
+import com.tomatodo.ui.cards.CardsScreen
+import com.tomatodo.ui.review.ReviewScreen
 import com.tomatodo.ui.settings.SettingsScreen
 import com.tomatodo.ui.stats.StatsScreen
 import com.tomatodo.timer.TimerScreen
@@ -64,9 +66,10 @@ fun MainScreen() {
         when (selected) {
             Destination.Board -> BoardScreen()
             Destination.Timer -> TimerScreen()
+            Destination.Review -> ReviewScreen()
+            Destination.Cards -> CardsScreen()
             Destination.Stats -> StatsScreen()
             Destination.Settings -> SettingsScreen()
-            else -> Placeholder(selected.label)
         }
     }
 }

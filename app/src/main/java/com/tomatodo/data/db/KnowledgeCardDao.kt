@@ -23,4 +23,7 @@ interface KnowledgeCardDao {
 
     @Query("DELETE FROM knowledge_cards WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE knowledge_cards SET masteryLevel = :mastery, reviewCount = :count, nextReviewAt = :nextReviewAt, lastReviewedAt = :now WHERE id = :id")
+    suspend fun updateReview(id: Long, mastery: Int, count: Int, nextReviewAt: Long, now: Long)
 }
