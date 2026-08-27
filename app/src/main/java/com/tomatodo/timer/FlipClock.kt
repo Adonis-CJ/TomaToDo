@@ -1,12 +1,8 @@
 package com.tomatodo.timer
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +38,7 @@ import com.tomatodo.ui.theme.AppMono
  * 翻页钟（用户反馈重做版）：4 张数字卡相互分离、哑光黑、整卡绕中线翻转的翻页效果。
  */
 
-/** 单张数字卡：数字变化时整卡绕中线翻入（rotationX -80° → 0°），哑光黑质感。 */
+/** 单张数字卡：数字变化时整卡「从上方翻落」——先翻至背面(-90°)，再平滑翻正到 0°。 */
 @Composable
 fun FlipCard(
     text: String,
@@ -58,8 +54,9 @@ fun FlipCard(
         if (!initialized) {
             initialized = true
         } else {
-            rotation.snapTo(-80f)
-            rotation.animateTo(0f, tween(340, easing = FastOutSlowInEasing))
+            // 从上往下翻：先瞬时翻至竖直背面（顶部朝内），再反向平滑落回正面
+            rotation.snapTo(-90f)
+            rotation.animateTo(0f, tween(560, easing = FastOutSlowInEasing))
         }
     }
 
@@ -69,26 +66,21 @@ fun FlipCard(
             .height(cardHeight)
             .graphicsLayer {
                 rotationX = rotation.value
-                cameraDistance = 14 * density
+                cameraDistance = 18 * density
             }
             .background(Color(0xFF161618), RoundedCornerShape(16.dp))
             .border(1.dp, Color(0xFF26262A), RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
     ) {
-        AnimatedContent(
-            targetState = text,
-            transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(120)) },
-            label = "flipDigit"
-        ) { value ->
-            Text(
-                value,
-                color = Color(0xFFF5F2EC),
-                fontSize = fontSize.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = AppMono
-            )
-        }
-        // 中缝（翻页轴）—— 横贯卡片中心的细线，不能 fillMaxSize 否则盖住数字
+        // 数字：卡片翻转过程即显示新值（背面朝上时已切换），不再叠加 fade
+        Text(
+            text,
+            color = Color(0xFFF5F2EC),
+            fontSize = fontSize.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = AppMono
+        )
+        // 中缝（翻页轴）—— 横贯卡片中心的细线
         Box(
             Modifier
                 .fillMaxWidth()
