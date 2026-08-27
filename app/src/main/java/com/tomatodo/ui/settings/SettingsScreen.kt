@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -41,7 +42,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -109,34 +109,30 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 
         // ---- 番茄钟 ----
         SettingsGroup(title = "番茄钟", icon = Icons.Outlined.Timer) {
-            SliderRow(
+            StepperRow(
                 label = "专注时长",
-                valueText = "${settings.focusMinutes} 分钟",
-                value = settings.focusMinutes.toFloat(),
-                valueRange = 5f..120f,
-                steps = 114
-            ) { viewModel.setFocus(it.toInt()) }
-            SliderRow(
+                value = settings.focusMinutes,
+                range = 5..120,
+                suffix = "分钟"
+            ) { viewModel.setFocus(it) }
+            StepperRow(
                 label = "短休息",
-                valueText = "${settings.shortBreakMinutes} 分钟",
-                value = settings.shortBreakMinutes.toFloat(),
-                valueRange = 1f..30f,
-                steps = 28
-            ) { viewModel.setShort(it.toInt()) }
-            SliderRow(
+                value = settings.shortBreakMinutes,
+                range = 1..30,
+                suffix = "分钟"
+            ) { viewModel.setShort(it) }
+            StepperRow(
                 label = "长休息",
-                valueText = "${settings.longBreakMinutes} 分钟",
-                value = settings.longBreakMinutes.toFloat(),
-                valueRange = 5f..60f,
-                steps = 54
-            ) { viewModel.setLong(it.toInt()) }
-            SliderRow(
+                value = settings.longBreakMinutes,
+                range = 5..60,
+                suffix = "分钟"
+            ) { viewModel.setLong(it) }
+            StepperRow(
                 label = "长休息前番茄数",
-                valueText = "${settings.pomodorosBeforeLongBreak} 个",
-                value = settings.pomodorosBeforeLongBreak.toFloat(),
-                valueRange = 1f..8f,
-                steps = 6
-            ) { viewModel.setPomodoros(it.toInt()) }
+                value = settings.pomodorosBeforeLongBreak,
+                range = 1..8,
+                suffix = "个"
+            ) { viewModel.setPomodoros(it) }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -154,13 +150,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     showRingtoneMenu = false
                 }
             )
-            SliderRow(
+            StepperRow(
                 label = "音量",
-                valueText = "${(settings.volume * 100).toInt()}%",
-                value = settings.volume,
-                valueRange = 0f..1f,
-                steps = 0
-            ) { viewModel.setVolume(it) }
+                value = (settings.volume * 100).toInt(),
+                range = 0..100,
+                step = 10,
+                format = { "$it%" }
+            ) { viewModel.setVolume(it / 100f) }
             SwitchRow(
                 title = "静音 + 仅震动",
                 description = "图书馆安静场合使用",
@@ -269,31 +265,62 @@ private fun SettingsGroup(
 
 // ---- 统一行组件 ----
 
+/** 步进器行（OPTIMIZATION UI 2.0）：圆形 ± 按钮 + 等宽数值，精准且不误触。 */
 @Composable
-private fun SliderRow(
+private fun StepperRow(
     label: String,
-    valueText: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onChange: (Float) -> Unit
+    value: Int,
+    range: IntRange,
+    suffix: String = "",
+    step: Int = 1,
+    format: (Int) -> String = { if (suffix.isEmpty()) "$it" else "$it $suffix" },
+    onChange: (Int) -> Unit
 ) {
-    Column(Modifier.padding(vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.weight(1f))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        StepperButton(
+            icon = Icons.Outlined.Remove,
+            enabled = value - step >= range.first
+        ) { onChange((value - step).coerceIn(range.first, range.last)) }
+        Box(Modifier.width(88.dp), contentAlignment = Alignment.Center) {
             Text(
-                valueText,
-                style = MaterialTheme.typography.labelMedium,
+                format(value),
+                style = MaterialTheme.typography.labelLarge,
                 fontFamily = AppMono,
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = valueRange,
-            steps = steps
+        StepperButton(
+            icon = Icons.Outlined.Add,
+            enabled = value + step <= range.last
+        ) { onChange((value + step).coerceIn(range.first, range.last)) }
+    }
+}
+
+@Composable
+private fun StepperButton(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(
+                if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+                else Color.Transparent
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = if (enabled) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outline
         )
     }
 }
