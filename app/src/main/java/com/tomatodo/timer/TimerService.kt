@@ -48,12 +48,17 @@ class TimerService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var vibrationOnly = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        scope.launch {
+            (application as com.tomatodo.TomaTodoApplication).container
+                .settingsPreferences.settings.collect { s -> vibrationOnly = s.vibrationOnly }
+        }
         scope.launch {
             TimerController.state.collect { state ->
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -125,7 +130,8 @@ class TimerService : Service() {
 
     private fun playCompletion() {
         vibrate()
-        // MVP：播放系统默认提示音（后续接入自定义铃声/音量/静音）
+        if (vibrationOnly) return // 静音 + 仅震动
+        // MVP：播放系统默认提示音（自定义铃声/音量后续细化）
         try {
             RingtoneManager.getRingtone(
                 this,
