@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -74,23 +75,30 @@ fun FlipCard(
             .background(Color(0xFF161618), RoundedCornerShape(16.dp))
             .border(1.dp, Color(0xFF26262A), RoundedCornerShape(16.dp))
     ) {
-        // ------------------ 下半片（静止，显示当前值旧半）------------------
+        // ------------------ 下半片（静止，显示数字下半）------------------
+        // 内部数字盒以整卡高 cardHeight 铺放并上移 half，使其中心落在卡片中线，实现中线截断。
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(half)
                 .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.TopCenter
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(cardHeight)
+                    .offset(y = -half),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     shown, color = Color(0xFFF5F2EC), fontSize = fontSize.sp,
                     fontWeight = FontWeight.Medium, fontFamily = AppMono
                 )
             }
         }
-        // ------------------ 上半片（向下翻页）------------------
+        // ------------------ 上半片（向下翻页，显示数字上半）------------------
         Box(
             Modifier
                 .align(Alignment.TopCenter)
@@ -101,12 +109,13 @@ fun FlipCard(
                     rotationX = flip.value
                     transformOrigin = TransformOrigin(0.5f, 1f) // 绕底边（水平中轴）旋转
                 },
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.TopCenter
         ) {
-            // 后半段(已翻过去)再镜像一次，让新值保持正立
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(cardHeight)
+                    .offset(y = 0.dp)
                     .graphicsLayer {
                         if (flip.value <= -90f) rotationX = 180f // 翻过半后抵消上下颠倒
                     },
