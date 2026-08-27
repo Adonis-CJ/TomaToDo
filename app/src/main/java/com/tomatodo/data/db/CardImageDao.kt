@@ -15,6 +15,9 @@ interface CardImageDao {
     fun observeAllImages(): Flow<List<CardImage>>
 
     @Insert
+    suspend fun insert(image: CardImage): Long
+
+    @Insert
     suspend fun insertAll(images: List<CardImage>)
 
     @Query("DELETE FROM card_images WHERE id = :id")
@@ -22,6 +25,9 @@ interface CardImageDao {
 
     @Query("DELETE FROM card_images WHERE cardId = :cardId")
     suspend fun deleteForCard(cardId: Long)
+
+    @Query("UPDATE card_images SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Int)
 
     @Query("SELECT * FROM card_images")
     suspend fun getAll(): List<CardImage>
