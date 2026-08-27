@@ -59,7 +59,7 @@
 | 图片 | CameraX 契约拍照 + Photo Picker + Coil |
 | 构建 | AGP 9 / Gradle 9.1 / KSP |
 
-**设计**：[PRD.md](PRD.md)（产品需求） · [OPTIMIZATION.md](OPTIMIZATION.md)（v1.1 优化方案） · [OPTIMIZATION-BOARD.md](OPTIMIZATION-BOARD.md)（看板专项）
+**设计**：[PRD.md](PRD.md)（产品需求文档）
 
 字体：[Noto Serif SC](https://fonts.google.com/specimen/Noto+Serif+SC) 与 [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono)（均 SIL OFL 授权）。
 
