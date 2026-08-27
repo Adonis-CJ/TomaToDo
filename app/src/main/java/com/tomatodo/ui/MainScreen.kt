@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.tomatodo.ui.board.BoardScreen
 import com.tomatodo.ui.settings.SettingsScreen
+import com.tomatodo.ui.stats.StatsScreen
 import com.tomatodo.timer.TimerScreen
 
 /** 主导航目的地（图标为 Material Symbols 线性 SVG，非 emoji） */
@@ -63,6 +64,7 @@ fun MainScreen() {
         when (selected) {
             Destination.Board -> BoardScreen()
             Destination.Timer -> TimerScreen()
+            Destination.Stats -> StatsScreen()
             Destination.Settings -> SettingsScreen()
             else -> Placeholder(selected.label)
         }

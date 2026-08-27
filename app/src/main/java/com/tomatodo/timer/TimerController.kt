@@ -30,7 +30,15 @@ object TimerController {
         val taskId: Long? = null
     )
 
-    enum class TimerEvent { PHASE_COMPLETED }
+    sealed interface TimerEvent {
+        data class PhaseCompleted(
+            val phase: PomodoroType,
+            val startAt: Long,
+            val endAt: Long,
+            val plannedMillis: Long,
+            val actualMillis: Long
+        ) : TimerEvent
+    }
 
     private val _state = MutableStateFlow(TimerState())
     val state: StateFlow<TimerState> = _state.asStateFlow()
@@ -41,6 +49,7 @@ object TimerController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var ticker: Job? = null
     private var endAt = 0L
+    private var phaseStartedAt = 0L
 
     private var focusMillis = 25 * 60_000L
     private var shortMillis = 5 * 60_000L
@@ -65,6 +74,9 @@ object TimerController {
     fun start(taskId: Long? = null) {
         val s = _state.value
         val remaining = if (s.remainingMillis > 0L) s.remainingMillis else phaseMillis(s.phase)
+        if (phaseStartedAt == 0L) {
+            phaseStartedAt = System.currentTimeMillis()
+        }
         endAt = System.currentTimeMillis() + remaining
         _state.value = s.copy(
             isRunning = true,
@@ -90,6 +102,7 @@ object TimerController {
         ticker?.cancel()
         ticker = null
         endAt = 0L
+        phaseStartedAt = 0L
         _state.value = TimerState(
             phase = PomodoroType.FOCUS,
             totalMillis = focusMillis,
@@ -109,7 +122,12 @@ object TimerController {
 
     private fun advancePhase() {
         val s = _state.value
-        val (nextPhase, newCompleted) = when (s.phase) {
+        val completedPhase = s.phase
+        val completedStartAt = if (phaseStartedAt != 0L) phaseStartedAt else System.currentTimeMillis()
+        val completedEndAt = System.currentTimeMillis()
+        val completedPlanned = phaseMillis(completedPhase)
+
+        val (nextPhase, newCompleted) = when (completedPhase) {
             PomodoroType.FOCUS -> {
                 val c = s.completedPomodoros + 1
                 val p = if (c % pomodorosBeforeLong == 0) PomodoroType.LONG_BREAK else PomodoroType.SHORT_BREAK
@@ -121,6 +139,7 @@ object TimerController {
         ticker?.cancel()
         ticker = null
         endAt = 0L
+        phaseStartedAt = 0L
         _state.value = s.copy(
             phase = nextPhase,
             completedPomodoros = newCompleted,
@@ -128,7 +147,17 @@ object TimerController {
             remainingMillis = total,
             isRunning = false
         )
-        scope.launch { _events.emit(TimerEvent.PHASE_COMPLETED) }
+        scope.launch {
+            _events.emit(
+                TimerEvent.PhaseCompleted(
+                    phase = completedPhase,
+                    startAt = completedStartAt,
+                    endAt = completedEndAt,
+                    plannedMillis = completedPlanned,
+                    actualMillis = completedPlanned
+                )
+            )
+        }
     }
 
     private fun startTicker() {

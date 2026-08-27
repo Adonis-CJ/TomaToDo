@@ -16,6 +16,9 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.tomatodo.MainActivity
 import com.tomatodo.R
+import com.tomatodo.TomaTodoApplication
+import com.tomatodo.data.model.PomodoroSession
+import com.tomatodo.data.model.PomodoroType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,7 +70,10 @@ class TimerService : Service() {
         }
         scope.launch {
             TimerController.events.collect { event ->
-                if (event == TimerController.TimerEvent.PHASE_COMPLETED) playCompletion()
+                if (event is TimerController.TimerEvent.PhaseCompleted) {
+                    if (event.phase == PomodoroType.FOCUS) recordFocusSession(event)
+                    playCompletion()
+                }
             }
         }
     }
@@ -126,6 +132,20 @@ class TimerService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
+    }
+
+    private suspend fun recordFocusSession(event: TimerController.TimerEvent.PhaseCompleted) {
+        val dao = (application as TomaTodoApplication).container.database.pomodoroSessionDao()
+        dao.insert(
+            PomodoroSession(
+                taskId = TimerController.state.value.taskId,
+                type = PomodoroType.FOCUS,
+                startAt = event.startAt,
+                endAt = event.endAt,
+                plannedDuration = event.plannedMillis / 60_000L,
+                actualDuration = event.actualMillis / 60_000L
+            )
+        )
     }
 
     private fun playCompletion() {
