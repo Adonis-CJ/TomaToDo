@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 应用的基础平台主题（无 ActionBar），真正的配色由 Material 3 主题控制 -->
+    <style name="Theme.TomaTodo" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
