@@ -14,15 +14,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,10 +30,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,12 +43,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
 import com.tomatodo.data.model.Subject
 import com.tomatodo.data.model.Task
 import com.tomatodo.data.model.TaskStatus
+import com.tomatodo.ui.theme.AppMono
 import com.tomatodo.ui.theme.Cinnabar
 import com.tomatodo.ui.theme.Ink
 import com.tomatodo.ui.theme.InkMuted
@@ -107,7 +106,6 @@ fun StatusCheckbox(
         animationSpec = spring(dampingRatio = 0.6f),
         label = "checkboxDot"
     )
-    // A1：白勾笔画描边动画
     val checkProgress by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
         animationSpec = tween(220),
@@ -116,29 +114,16 @@ fun StatusCheckbox(
 
     Canvas(
         modifier = modifier
-            .size(22.dp)
+            .size(24.dp)
             .clickable(enabled = enabled, onClick = onToggle)
     ) {
         val stroke = 2.dp.toPx()
         val radius = size.minDimension / 2f - stroke
         val center = Offset(size.width / 2f, size.height / 2f)
 
-        // 圆环
-        drawCircle(
-            color = ringColor,
-            radius = radius,
-            center = center,
-            style = Stroke(width = stroke)
-        )
-        // 完成实心填充（弹入）
-        if (fillScale > 0.01f) {
-            drawCircle(color = PineGreen, radius = radius * fillScale, center = center)
-        }
-        // 进行中内点
-        if (dotScale > 0.01f) {
-            drawCircle(color = Cinnabar, radius = radius * 0.38f * dotScale, center = center)
-        }
-        // 白勾描边（画出来）
+        drawCircle(color = ringColor, radius = radius, center = center, style = Stroke(width = stroke))
+        if (fillScale > 0.01f) drawCircle(color = PineGreen, radius = radius * fillScale, center = center)
+        if (dotScale > 0.01f) drawCircle(color = Cinnabar, radius = radius * 0.38f * dotScale, center = center)
         if (checkProgress > 0.01f) {
             val checkPath = Path().apply {
                 moveTo(center.x - radius * 0.5f, center.y + radius * 0.02f)
@@ -149,8 +134,7 @@ fun StatusCheckbox(
             val segment = Path()
             measure.getSegment(0f, measure.length * checkProgress, segment, true)
             drawPath(
-                segment,
-                color = Color.White,
+                segment, color = Color.White,
                 style = Stroke(width = stroke * 0.9f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
         }
@@ -158,9 +142,9 @@ fun StatusCheckbox(
 }
 
 /**
- * 三态任务卡片（OPTIMIZATION-BOARD §2.2）：
- * 左缘状态色条 + 科目 chip + 内容（完成划线/变灰）+ 三态勾选框 + 开始番茄。
- * 点击主体进入编辑；勾选框直达完成。
+ * 任务卡片（墨·纸 精致版）：两段式排版 ——
+ * 顶行（科目 chip + 等宽开始时间）/ 内容大段 / 底行（勾选框 + 等宽时间范围 + 朱砂开始番茄钮）。
+ * 点击主体编辑、左滑删除、勾选直达完成；进行中朱砂 hairline，完成划线降透明。
  */
 @Composable
 fun TaskCard(
@@ -173,17 +157,8 @@ fun TaskCard(
     modifier: Modifier = Modifier
 ) {
     val done = task.isCompleted
-    val density = LocalDensity.current
-
-    // A3：完成弹跳（轻微实体感）
     val bounce = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
-    fun bounceOnce() {
-        scope.launch {
-            bounce.snapTo(0.965f)
-            bounce.animateTo(1f, spring(dampingRatio = 0.45f))
-        }
-    }
 
     val contentColor by animateColorAsState(
         targetValue = if (done) InkMuted else Ink,
@@ -191,18 +166,9 @@ fun TaskCard(
         label = "taskContent"
     )
     val cardAlpha by animateFloatAsState(
-        targetValue = if (done) 0.62f else 1f,
+        targetValue = if (done) 0.6f else 1f,
         animationSpec = tween(200),
         label = "taskAlpha"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = when {
-            done -> MaterialTheme.colorScheme.outlineVariant
-            task.status == TaskStatus.DOING -> Cinnabar
-            else -> MaterialTheme.colorScheme.outlineVariant
-        },
-        animationSpec = tween(200),
-        label = "taskBorder"
     )
 
     Card(
@@ -213,12 +179,12 @@ fun TaskCard(
             alpha = cardAlpha
         },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (task.status == TaskStatus.DOING && !done) 1.dp else 0.dp,
-            color = borderColor
-        )
+        border = if (task.status == TaskStatus.DOING && !done) {
+            androidx.compose.foundation.BorderStroke(1.dp, Cinnabar.copy(alpha = 0.5f))
+        } else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
+        Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
             // 左缘状态色条
             Box(
                 Modifier
@@ -226,72 +192,66 @@ fun TaskCard(
                     .fillMaxHeight()
                     .background(statusColor(task.status))
             )
-            Column(
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-            ) {
+            Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                // 顶行：科目 chip + 开始时间（等宽）
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (subject != null) {
-                        SubjectChip(subject)
-                    }
+                    if (subject != null) SubjectChip(subject)
                     Spacer(Modifier.weight(1f))
                     Text(
-                        formatTime(task.startTime),
-                        style = MaterialTheme.typography.labelSmall,
+                        "${formatTime(task.startTime)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = AppMono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(10.dp))
+
+                // 内容大段
                 Text(
                     task.content,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     color = contentColor,
                     textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+
+                // 底行：勾选框 + 时间范围 + 开始番茄
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (!readOnly) {
                         StatusCheckbox(status = task.status) {
-                            bounceOnce()
+                            scope.launch {
+                                bounce.snapTo(0.96f)
+                                bounce.animateTo(1f, spring(dampingRatio = 0.45f))
+                            }
                             onToggle()
                         }
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(
-                        "${formatTime(task.startTime)} – ${formatTime(task.endTime)}",
+                        "${formatTime(task.startTime)}–${formatTime(task.endTime)}",
                         style = MaterialTheme.typography.labelSmall,
+                        fontFamily = AppMono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.weight(1f))
                     if (!readOnly && onStartPomodoro != null && !done) {
                         Box(
                             Modifier
-                                .size(26.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Cinnabar.copy(alpha = 0.12f))
-                                .clickable(onClick = onStartPomodoro),
+                                .background(Cinnabar)
+                                .clickable(onClick = { onStartPomodoro() }),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Outlined.PlayArrow,
                                 contentDescription = "开始番茄",
-                                tint = Cinnabar,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    if (!readOnly) {
-                        Icon(
-                            Icons.Outlined.Edit,
-                            contentDescription = "编辑",
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable(onClick = onEdit),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
@@ -304,22 +264,18 @@ private fun SubjectChip(subject: Subject) {
     val color = Color(subject.color)
     Row(
         Modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
+        Box(Modifier.size(6.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(4.dp))
         Text(
             subject.name,
             style = MaterialTheme.typography.labelSmall,
-            color = color
+            color = color,
+            maxLines = 1
         )
     }
 }
