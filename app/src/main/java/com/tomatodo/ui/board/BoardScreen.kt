@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -67,6 +68,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -83,6 +85,8 @@ import com.tomatodo.data.model.Task
 import com.tomatodo.data.model.TaskStatus
 import com.tomatodo.ui.theme.Cinnabar
 import com.tomatodo.ui.theme.PineGreen
+import com.tomatodo.ui.daysToExam
+import com.tomatodo.ui.todayMotto
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -168,6 +172,10 @@ fun BoardScreen(
                     Text("新建任务")
                 }
             }
+
+            // 语气寄语栏（每日一句格言）
+            MottoBar()
+            Spacer(Modifier.height(8.dp))
 
             // 日期导航条（← 日期 → + DatePicker + 回到今天）
             DateNavBar(
@@ -302,6 +310,50 @@ fun BoardScreen(
                 sheetTask = null
             }
         )
+    }
+}
+
+/** 看板语气寄语栏：选自定义寄语或每日轮换格言（用户可在设置中自定义寄语） */
+@Composable
+private fun MottoBar() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val customMotto by remember(context) {
+        (context.applicationContext as com.tomatodo.TomaTodoApplication)
+            .container.settingsPreferences.motto
+    }.collectAsState(initial = null)
+    val motto = customMotto?.takeIf { it.isNotBlank() } ?: todayMotto()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 18.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                motto,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "距考研 ${daysToExam()} 天",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -460,10 +512,11 @@ private fun BoardColumn(
     modifier: Modifier = Modifier
 ) {
     val columnTasks = tasks.filter { it.status == status }
+    // 列底用深一档的 surfaceVariant，衬出纸白任务卡（避免卡片与底色融合）
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -180,10 +180,12 @@ fun TaskCard(
         },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = if (task.status == TaskStatus.DOING && !done) {
-            androidx.compose.foundation.BorderStroke(1.dp, Cinnabar.copy(alpha = 0.45f))
-        } else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (task.status == TaskStatus.DOING && !done) Cinnabar.copy(alpha = 0.55f)
+            else MaterialTheme.colorScheme.outlineVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
             // 左缘状态色条（随卡片圆角被一起裁剪）

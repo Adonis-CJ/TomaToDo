@@ -40,6 +40,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setImmersionMode(mode: com.tomatodo.data.preferences.ImmersionMode) =
         viewModelScope.launch { prefs.setImmersionMode(mode) }
 
+    /** 自定义看板寄语（留空则每日轮换格言） */
+    fun setMotto(value: String?) = viewModelScope.launch { prefs.setMotto(value) }
+
     /** 上传沉浸背景图：压缩拷贝到内部存储并记录路径 */
     fun setWallpaper(uri: Uri?) = viewModelScope.launch(Dispatchers.IO) {
         if (uri == null) {

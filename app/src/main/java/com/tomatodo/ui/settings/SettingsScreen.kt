@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -92,6 +93,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val subjects by viewModel.subjects.collectAsState()
     var showRingtoneMenu by remember { mutableStateOf(false) }
     var showAddSubject by remember { mutableStateOf(false) }
+    var mottoText by remember { mutableStateOf(settings.motto ?: "") }
+    val keyboardHider = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
@@ -263,6 +266,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 selected = settings.themeMode,
                 onSelect = viewModel::setThemeMode
             )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 看板寄语（可自定义）----
+        SettingsGroup(title = "看板寄语", icon = Icons.Outlined.FormatQuote) {
+            OutlinedTextField(
+                value = mottoText,
+                onValueChange = { mottoText = it },
+                label = { Text("自定义寄语（留空则每日轮换格言）") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2
+            )
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = {
+                viewModel.setMotto(mottoText)
+                keyboardHider?.hide()
+            }) {
+                Text("保存寄语")
+            }
         }
         Spacer(Modifier.height(16.dp))
 

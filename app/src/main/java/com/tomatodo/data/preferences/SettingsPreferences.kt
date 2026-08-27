@@ -29,7 +29,8 @@ data class TimerSettings(
     val vibrationOnly: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val immersionMode: ImmersionMode = ImmersionMode.FLIP,
-    val wallpaperPath: String? = null
+    val wallpaperPath: String? = null,
+    val motto: String? = null
 )
 
 class SettingsPreferences(private val context: Context) {
@@ -45,6 +46,7 @@ class SettingsPreferences(private val context: Context) {
         val THEME_MODE = intPreferencesKey("theme_mode")
         val IMMERSION_MODE = stringPreferencesKey("immersion_mode")
         val WALLPAPER_PATH = stringPreferencesKey("wallpaper_path")
+        val MOTTO = stringPreferencesKey("motto")
     }
 
     val settings: Flow<TimerSettings> = context.dataStore.data.map { prefs ->
@@ -60,9 +62,12 @@ class SettingsPreferences(private val context: Context) {
             immersionMode = runCatching {
                 ImmersionMode.valueOf(prefs[Keys.IMMERSION_MODE] ?: ImmersionMode.FLIP.name)
             }.getOrDefault(ImmersionMode.FLIP),
-            wallpaperPath = prefs[Keys.WALLPAPER_PATH]
+            wallpaperPath = prefs[Keys.WALLPAPER_PATH],
+            motto = prefs[Keys.MOTTO]
         )
     }
+
+    val motto: Flow<String?> = context.dataStore.data.map { prefs -> prefs[Keys.MOTTO] }
 
     suspend fun setFocusMinutes(value: Int) = edit { it[Keys.FOCUS] = value }
     suspend fun setShortBreakMinutes(value: Int) = edit { it[Keys.SHORT_BREAK] = value }
@@ -75,6 +80,9 @@ class SettingsPreferences(private val context: Context) {
     suspend fun setImmersionMode(value: ImmersionMode) = edit { it[Keys.IMMERSION_MODE] = value.name }
     suspend fun setWallpaperPath(value: String?) = edit {
         if (value == null) it.remove(Keys.WALLPAPER_PATH) else it[Keys.WALLPAPER_PATH] = value
+    }
+    suspend fun setMotto(value: String?) = edit {
+        if (value.isNullOrBlank()) it.remove(Keys.MOTTO) else it[Keys.MOTTO] = value.trim()
     }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {

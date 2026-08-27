@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -18,6 +21,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Surface
@@ -47,6 +51,35 @@ enum class Destination(val label: String, val icon: ImageVector) {
     Cards("卡片", Icons.Outlined.Style),
     Stats("统计", Icons.Outlined.BarChart),
     Settings("设置", Icons.Outlined.Settings),
+}
+
+/** 侧边栏顶部：考研倒计时 */
+@Composable
+private fun CountdownHeader() {
+    val days = daysToExam()
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+    ) {
+        Text(
+            "距考研",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "$days",
+            style = MaterialTheme.typography.headlineMedium.copy(
+                color = MaterialTheme.colorScheme.primary
+            ),
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+        )
+        Text(
+            "天",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
@@ -79,6 +112,8 @@ fun MainScreen() {
                 androidx.compose.animation.AnimatedVisibility(visible = !timerImmersive) {
                     Column {
                         NavigationRail {
+                            // 顶部：考研倒计时
+                            CountdownHeader()
                             Spacer(Modifier.weight(1f))
                             Destination.entries.forEach { dest ->
                                 NavigationRailItem(
