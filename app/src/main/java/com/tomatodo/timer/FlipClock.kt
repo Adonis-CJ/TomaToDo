@@ -26,7 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -38,7 +40,10 @@ import com.tomatodo.ui.theme.AppMono
  * 翻页钟（用户反馈重做版）：4 张数字卡相互分离、哑光黑、整卡绕中线翻转的翻页效果。
  */
 
-/** 单张数字卡：数字变化时整卡「从上方翻落」——先翻至背面(-90°)，再平滑翻正到 0°。 */
+/**
+ * 单张数字卡：台历翻页——只动上半片绕水平中轴向下翻（0 → -180°），下半片静止。
+ * 后半段换新值并加镜像抵消（避免翻过去时反字），翻页完成整卡更新。
+ */
 @Composable
 fun FlipCard(
     text: String,
@@ -47,40 +52,73 @@ fun FlipCard(
     fontSize: Int = 104,
     modifier: Modifier = Modifier
 ) {
-    val rotation = remember { Animatable(0f) }
-    var initialized by remember { mutableStateOf(false) }
+    var shown by remember { mutableStateOf(text) }
+    val flip = remember { Animatable(0f) }
 
     LaunchedEffect(text) {
-        if (!initialized) {
-            initialized = true
-        } else {
-            // 从上往下翻：先瞬时翻至竖直背面（顶部朝内），再反向平滑落回正面
-            rotation.snapTo(-90f)
-            rotation.animateTo(0f, tween(560, easing = FastOutSlowInEasing))
-        }
+        if (shown == text) return@LaunchedEffect
+        flip.snapTo(0f)
+        flip.animateTo(-180f, tween(420, easing = FastOutSlowInEasing))
+        shown = text
+        flip.snapTo(0f)
     }
+
+    val half = cardHeight / 2
+    // 上半翻页内容：前半(0..-90)显示旧值，后半(-90..-180)显示新值
+    val topContent = if (flip.value <= -90f) text else shown
 
     Box(
         modifier
             .width(cardWidth)
             .height(cardHeight)
-            .graphicsLayer {
-                rotationX = rotation.value
-                cameraDistance = 18 * density
-            }
             .background(Color(0xFF161618), RoundedCornerShape(16.dp))
-            .border(1.dp, Color(0xFF26262A), RoundedCornerShape(16.dp)),
-        contentAlignment = Alignment.Center
+            .border(1.dp, Color(0xFF26262A), RoundedCornerShape(16.dp))
     ) {
-        // 数字：卡片翻转过程即显示新值（背面朝上时已切换），不再叠加 fade
-        Text(
-            text,
-            color = Color(0xFFF5F2EC),
-            fontSize = fontSize.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = AppMono
-        )
-        // 中缝（翻页轴）—— 横贯卡片中心的细线
+        // ------------------ 下半片（静止，显示当前值旧半）------------------
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(half)
+                .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    shown, color = Color(0xFFF5F2EC), fontSize = fontSize.sp,
+                    fontWeight = FontWeight.Medium, fontFamily = AppMono
+                )
+            }
+        }
+        // ------------------ 上半片（向下翻页）------------------
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(half)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .graphicsLayer {
+                    rotationX = flip.value
+                    transformOrigin = TransformOrigin(0.5f, 1f) // 绕底边（水平中轴）旋转
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // 后半段(已翻过去)再镜像一次，让新值保持正立
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (flip.value <= -90f) rotationX = 180f // 翻过半后抵消上下颠倒
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    topContent, color = Color(0xFFF5F2EC), fontSize = fontSize.sp,
+                    fontWeight = FontWeight.Medium, fontFamily = AppMono
+                )
+            }
+        }
+        // 中缝（翻页轴）
         Box(
             Modifier
                 .fillMaxWidth()
