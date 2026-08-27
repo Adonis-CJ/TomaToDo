@@ -203,7 +203,7 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
                 baseColor = PineGreen,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(96.dp)
+                    .height(140.dp)
             )
         }
         Spacer(Modifier.height(16.dp))

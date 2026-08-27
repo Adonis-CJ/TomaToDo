@@ -162,25 +162,36 @@ fun HeatmapCalendar(
 ) {
     Canvas(modifier) {
         if (weeklyValues.isEmpty()) return@Canvas
-        val cell = size.width / weeklyValues.size
+        // 格子大小取宽高约束的较小者，保证 7 行完整显示并水平居中
+        val cell = minOf(size.width / weeklyValues.size, size.height / 7f)
         val gap = cell * 0.22f
         val draw = cell - gap
+        val offsetX = (size.width - cell * weeklyValues.size) / 2f
         weeklyValues.forEachIndexed { w, week ->
             week.forEachIndexed { d, v ->
                 val alpha = when {
-                    v <= 0.0 -> 0f
+                    v < 0.0 -> 0f          // 未来日期，不绘制
+                    v == 0.0 -> 0f
                     v < 0.25 -> 0.25f
                     v < 0.5 -> 0.45f
                     v < 0.75 -> 0.7f
                     else -> 1f
                 }
-                drawRoundRect(
-                    color = if (alpha == 0f) baseColor.copy(alpha = 0.08f)
-                    else baseColor.copy(alpha = alpha),
-                    topLeft = Offset(w * cell, d * cell),
-                    size = Size(draw, draw),
-                    cornerRadius = CornerRadius(draw * 0.25f)
-                )
+                if (alpha > 0f) {
+                    drawRoundRect(
+                        color = baseColor.copy(alpha = alpha),
+                        topLeft = Offset(offsetX + w * cell, d * cell),
+                        size = Size(draw, draw),
+                        cornerRadius = CornerRadius(draw * 0.25f)
+                    )
+                } else {
+                    drawRoundRect(
+                        color = baseColor.copy(alpha = 0.08f),
+                        topLeft = Offset(offsetX + w * cell, d * cell),
+                        size = Size(draw, draw),
+                        cornerRadius = CornerRadius(draw * 0.25f)
+                    )
+                }
             }
         }
     }
