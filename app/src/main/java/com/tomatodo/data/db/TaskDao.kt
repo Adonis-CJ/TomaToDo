@@ -27,4 +27,13 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET pomodoroCount = pomodoroCount + 1, updatedAt = :updatedAt WHERE id = :id")
     suspend fun incrementPomodoro(id: Long, updatedAt: Long)
+
+    @Query("SELECT * FROM tasks")
+    suspend fun getAll(): List<Task>
+
+    @Insert
+    suspend fun insertAll(tasks: List<Task>)
+
+    @Query("DELETE FROM tasks")
+    suspend fun deleteAll()
 }

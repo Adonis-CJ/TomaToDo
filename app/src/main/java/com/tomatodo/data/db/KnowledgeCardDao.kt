@@ -26,4 +26,13 @@ interface KnowledgeCardDao {
 
     @Query("UPDATE knowledge_cards SET masteryLevel = :mastery, reviewCount = :count, nextReviewAt = :nextReviewAt, lastReviewedAt = :now WHERE id = :id")
     suspend fun updateReview(id: Long, mastery: Int, count: Int, nextReviewAt: Long, now: Long)
+
+    @Query("SELECT * FROM knowledge_cards")
+    suspend fun getAll(): List<KnowledgeCard>
+
+    @Insert
+    suspend fun insertAll(cards: List<KnowledgeCard>)
+
+    @Query("DELETE FROM knowledge_cards")
+    suspend fun deleteAll()
 }

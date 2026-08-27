@@ -1,12 +1,15 @@
 package com.tomatodo.ui.settings
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomatodo.TomaTodoApplication
+import com.tomatodo.data.BackupManager
 import com.tomatodo.data.model.Subject
 import com.tomatodo.data.preferences.ThemeMode
 import com.tomatodo.data.preferences.TimerSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -16,6 +19,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val container = (application as TomaTodoApplication).container
     private val prefs = container.settingsPreferences
     private val subjectDao = container.database.subjectDao()
+    private val backupManager = BackupManager(container.database)
 
     val settings: StateFlow<TimerSettings> = prefs.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, TimerSettings())
@@ -41,5 +45,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteSubject(subject: Subject) = viewModelScope.launch {
         if (!subject.isBuiltIn) subjectDao.delete(subject.id)
+    }
+
+    fun exportTo(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val json = backupManager.export()
+            getApplication<Application>().contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(json.toByteArray(Charsets.UTF_8))
+            }
+        } catch (_: Exception) {
+            // ignore
+        }
+    }
+
+    fun importFrom(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val json = getApplication<Application>().contentResolver.openInputStream(uri)
+                ?.use { it.readBytes().decodeToString() }
+            if (!json.isNullOrBlank()) backupManager.import(json)
+        } catch (_: Exception) {
+            // ignore
+        }
     }
 }

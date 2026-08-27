@@ -19,4 +19,10 @@ interface CardImageDao {
 
     @Query("DELETE FROM card_images WHERE cardId = :cardId")
     suspend fun deleteForCard(cardId: Long)
+
+    @Query("SELECT * FROM card_images")
+    suspend fun getAll(): List<CardImage>
+
+    @Query("DELETE FROM card_images")
+    suspend fun deleteAll()
 }

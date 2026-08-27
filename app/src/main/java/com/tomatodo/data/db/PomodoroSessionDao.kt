@@ -16,4 +16,13 @@ interface PomodoroSessionDao {
 
     @Query("SELECT * FROM pomodoro_sessions WHERE startAt >= :from AND startAt < :to ORDER BY startAt")
     suspend fun getInRange(from: Long, to: Long): List<PomodoroSession>
+
+    @Query("SELECT * FROM pomodoro_sessions")
+    suspend fun getAll(): List<PomodoroSession>
+
+    @Insert
+    suspend fun insertAll(sessions: List<PomodoroSession>)
+
+    @Query("DELETE FROM pomodoro_sessions")
+    suspend fun deleteAll()
 }

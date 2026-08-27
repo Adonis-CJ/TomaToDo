@@ -1,5 +1,7 @@
 package com.tomatodo.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -71,6 +73,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val subjects by viewModel.subjects.collectAsState()
     var showRingtoneMenu by remember { mutableStateOf(false) }
     var showAddSubject by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { viewModel.exportTo(it) } }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { viewModel.importFrom(it) } }
 
     Column(
         Modifier
@@ -165,6 +174,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("添加科目")
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        // 数据备份
+        Text("数据备份", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { exportLauncher.launch("tomatodo_backup.json") }) {
+                Text("导出备份")
+            }
+            OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
+                Text("导入备份")
+            }
         }
         Spacer(Modifier.height(32.dp))
     }
