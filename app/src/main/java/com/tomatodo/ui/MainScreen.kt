@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.tomatodo.ui.board.BoardScreen
+import com.tomatodo.timer.TimerScreen
 
 /** 主导航目的地（图标为 Material Symbols 线性 SVG，非 emoji） */
 enum class Destination(val label: String, val icon: ImageVector) {
@@ -60,6 +61,7 @@ fun MainScreen() {
         // 内容区
         when (selected) {
             Destination.Board -> BoardScreen()
+            Destination.Timer -> TimerScreen()
             else -> Placeholder(selected.label)
         }
     }
