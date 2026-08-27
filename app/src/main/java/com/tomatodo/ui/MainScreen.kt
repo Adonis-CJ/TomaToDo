@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,6 +55,8 @@ fun MainScreen() {
     // 轻量路由：卡片撰写页（null = 关闭；cardId 为 null 表示新建）
     var editingCardId by remember { mutableStateOf<Long?>(null) }
     var editorOpen by remember { mutableStateOf(false) }
+    // 番茄沉浸式全屏：隐藏导航栏（外壳根据此状态只渲染计时页）
+    var timerImmersive by remember { mutableStateOf(false) }
     // 番茄钟 ViewModel 提升至 MainScreen，看板可一键启动
     val timerViewModel: com.tomatodo.timer.TimerViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
@@ -72,20 +75,24 @@ fun MainScreen() {
             )
         } else {
             Row(Modifier.fillMaxSize()) {
-                // 左侧导航栏（平板 Navigation Rail）
-                NavigationRail {
-                    Spacer(Modifier.weight(1f))
-                    Destination.entries.forEach { dest ->
-                        NavigationRailItem(
-                            selected = selected == dest,
-                            onClick = { selected = dest },
-                            icon = { Icon(dest.icon, contentDescription = dest.label) },
-                            label = { Text(dest.label) }
-                        )
+                // 沉浸式时隐藏导航栏，实现真·全屏（不重建计时页状态）
+                androidx.compose.animation.AnimatedVisibility(visible = !timerImmersive) {
+                    Column {
+                        NavigationRail {
+                            Spacer(Modifier.weight(1f))
+                            Destination.entries.forEach { dest ->
+                                NavigationRailItem(
+                                    selected = selected == dest,
+                                    onClick = { selected = dest },
+                                    icon = { Icon(dest.icon, contentDescription = dest.label) },
+                                    label = { Text(dest.label) }
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
-                    Spacer(Modifier.weight(1f))
                 }
-                VerticalDivider()
+                if (!timerImmersive) VerticalDivider()
                 // 内容区
                 when (selected) {
                     Destination.Board -> BoardScreen(
@@ -94,7 +101,10 @@ fun MainScreen() {
                             selected = Destination.Timer
                         }
                     )
-                    Destination.Timer -> TimerScreen(timerViewModel)
+                    Destination.Timer -> TimerScreen(
+                        onImmersiveChanged = { timerImmersive = it },
+                        viewModel = timerViewModel
+                    )
                     Destination.Review -> ReviewScreen()
                     Destination.Cards -> CardsScreen(
                         onEditCard = { id ->

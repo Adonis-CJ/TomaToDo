@@ -36,6 +36,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setVibrationOnly(v: Boolean) = viewModelScope.launch { prefs.setVibrationOnly(v) }
     fun setThemeMode(m: ThemeMode) = viewModelScope.launch { prefs.setThemeMode(m) }
 
+    /** 沉浸模式切换（翻页钟 / 背景图时钟） */
+    fun setImmersionMode(mode: com.tomatodo.data.preferences.ImmersionMode) =
+        viewModelScope.launch { prefs.setImmersionMode(mode) }
+
+    /** 上传沉浸背景图：压缩拷贝到内部存储并记录路径 */
+    fun setWallpaper(uri: Uri?) = viewModelScope.launch(Dispatchers.IO) {
+        if (uri == null) {
+            prefs.setWallpaperPath(null)
+            return@launch
+        }
+        runCatching {
+            val resolver = getApplication<Application>().contentResolver
+            val target = java.io.File(getApplication<Application>().filesDir, "wallpaper.jpg")
+            resolver.openInputStream(uri)?.use { input ->
+                val bitmap = android.graphics.BitmapFactory.decodeStream(input)
+                    ?: return@launch
+                // 长边压到 2000px，控制体积
+                val maxDim = maxOf(bitmap.width, bitmap.height)
+                val scaled = if (maxDim > 2000) {
+                    val scale = 2000f / maxDim
+                    android.graphics.Bitmap.createScaledBitmap(
+                        bitmap,
+                        (bitmap.width * scale).toInt().coerceAtLeast(1),
+                        (bitmap.height * scale).toInt().coerceAtLeast(1),
+                        true
+                    )
+                } else bitmap
+                target.outputStream().use { out ->
+                    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, out)
+                }
+            }
+            prefs.setWallpaperPath("wallpaper.jpg")
+        }
+    }
+
     fun addSubject(name: String, color: Long) = viewModelScope.launch {
         if (name.isBlank()) return@launch
         subjectDao.upsert(

@@ -1,6 +1,7 @@
 package com.tomatodo.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Timer
@@ -97,6 +99,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { viewModel.importFrom(it) } }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val pickWallpaper = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> viewModel.setWallpaper(uri) }
 
     Column(
         Modifier
@@ -133,6 +139,83 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 range = 1..8,
                 suffix = "个"
             ) { viewModel.setPomodoros(it) }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 沉浸模式 ----
+        SettingsGroup(title = "沉浸模式", icon = Icons.Outlined.Fullscreen) {
+            Text(
+                "开始计时 3 秒后自动进入全屏沉浸；轻触屏幕呼出控制",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ImmersionPreviewCard(
+                    title = "翻页钟",
+                    selected = settings.immersionMode == com.tomatodo.data.preferences.ImmersionMode.FLIP,
+                    onSelect = { viewModel.setImmersionMode(com.tomatodo.data.preferences.ImmersionMode.FLIP) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // 迷你预览：黑底双卡
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF0E0E11))
+                            .padding(vertical = 14.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MiniFlipCard("25")
+                        MiniFlipColon()
+                        MiniFlipCard("00")
+                    }
+                }
+                ImmersionPreviewCard(
+                    title = "背景图时钟",
+                    selected = settings.immersionMode == com.tomatodo.data.preferences.ImmersionMode.PHOTO,
+                    onSelect = { viewModel.setImmersionMode(com.tomatodo.data.preferences.ImmersionMode.PHOTO) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF2B2A26))
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (settings.wallpaperPath != null) {
+                            coil.compose.AsyncImage(
+                                model = java.io.File(context.filesDir, settings.wallpaperPath),
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxWidth().height(54.dp)
+                            )
+                        } else {
+                            Text(
+                                "25:00",
+                                fontFamily = AppMono,
+                                color = Color.White,
+                                modifier = Modifier.padding(vertical = 14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            if (settings.immersionMode == com.tomatodo.data.preferences.ImmersionMode.PHOTO) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        pickWallpaper.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (settings.wallpaperPath == null) "上传背景图" else "更换背景图") }
+                if (settings.wallpaperPath != null) {
+                    TextButton(onClick = { viewModel.setWallpaper(null) }) { Text("恢复默认深色背景") }
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -498,9 +581,70 @@ private fun ThemeMiniPreview(mode: ThemeMode) {
     }
 }
 
+/** 沉浸模式预览卡：迷你效果示意 + 选中描边 */
 @Composable
-private fun SubjectRow(subject: Subject, onDelete: () -> Unit) {
-    Row(
+private fun ImmersionPreviewCard(
+    title: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier.clickable(onClick = onSelect),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(10.dp)
+                )
+        ) { content() }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun MiniFlipCard(text: String) {
+    Box(
+        Modifier
+            .width(28.dp)
+            .height(38.dp)
+            .background(Color(0xFF1C1C20), RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontFamily = AppMono
+        )
+    }
+}
+
+@Composable
+private fun MiniFlipColon() {
+    Text(
+        ":",
+        color = Color(0xFF3A3A40),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = 3.dp)
+    )
+}
+
+@Composable
+private fun SubjectRow(subject: Subject, onDelete: () -> Unit) {    Row(
         Modifier
             .fillMaxWidth()
             .height(44.dp),

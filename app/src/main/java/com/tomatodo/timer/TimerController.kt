@@ -71,8 +71,12 @@ object TimerController {
         }
     }
 
-    fun start(taskId: Long? = null) {
-        val s = _state.value
+    /** 换绑当前关联任务（计时页任务选择器）：运行中立即生效，空闲时记住待 start 使用 */
+    fun bindTask(taskId: Long?) {
+        _state.value = _state.value.copy(taskId = taskId)
+    }
+
+    fun start(taskId: Long? = null) {        val s = _state.value
         val remaining = if (s.remainingMillis > 0L) s.remainingMillis else phaseMillis(s.phase)
         if (phaseStartedAt == 0L) {
             phaseStartedAt = System.currentTimeMillis()

@@ -35,6 +35,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
+    /** 看板科目筛选（null = 全部；UNASSIGNED = 未分类） */
+    private val _selectedSubjectId = MutableStateFlow<Long?>(null)
+    val selectedSubjectId: StateFlow<Long?> = _selectedSubjectId.asStateFlow()
+
+    fun selectSubject(id: Long?) { _selectedSubjectId.value = id }
+
     data class BoardState(
         val date: LocalDate = LocalDate.now(),
         val isToday: Boolean = true,
@@ -43,15 +49,24 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         val doneCount: Int get() = tasks.count { it.isCompleted }
     }
 
-    /** 所选日期的看板状态（按任务 startTime 归属日） */
-    val boardState: StateFlow<BoardState> = _selectedDate.flatMapLatest { date ->
-        val zone = ZoneId.systemDefault()
-        val from = date.atStartOfDay(zone).toInstant().toEpochMilli()
-        val to = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        taskDao.observeByDate(from, to).map { tasks ->
-            BoardState(date = date, isToday = date == LocalDate.now(), tasks = tasks)
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, BoardState())
+    /** 所选日期 + 科目筛选后的看板状态（按任务 startTime 归属日） */
+    val boardState: StateFlow<BoardState> =
+        kotlinx.coroutines.flow.combine(_selectedDate, _selectedSubjectId) { d, s -> d to s }
+            .flatMapLatest { (date, subject) ->
+                val zone = ZoneId.systemDefault()
+                val from = date.atStartOfDay(zone).toInstant().toEpochMilli()
+                val to = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                taskDao.observeByDate(from, to).map { tasks ->
+                    val filtered = when (subject) {
+                        null -> tasks
+                        com.tomatodo.ui.cards.UNASSIGNED_SUBJECT_ID ->
+                            tasks.filter { it.subjectId == null }
+                        else -> tasks.filter { it.subjectId == subject }
+                    }
+                    BoardState(date = date, isToday = date == LocalDate.now(), tasks = filtered)
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, BoardState())
 
     // ---- 日期导航 ----
 

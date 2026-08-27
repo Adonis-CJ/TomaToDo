@@ -52,4 +52,17 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** 悬浮窗仅在应用进入后台且计时进行时出现（用户反馈） */
+    override fun onStop() {
+        super.onStop()
+        if (com.tomatodo.timer.TimerController.state.value.isRunning) {
+            com.tomatodo.timer.FloatingWindowManager.show(this)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        com.tomatodo.timer.FloatingWindowManager.hide()
+    }
 }

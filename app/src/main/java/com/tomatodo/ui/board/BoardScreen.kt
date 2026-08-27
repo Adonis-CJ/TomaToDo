@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -36,6 +38,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -108,6 +111,7 @@ fun BoardScreen(
 ) {
     val state by viewModel.boardState.collectAsState()
     val subjects by viewModel.subjects.collectAsState(initial = emptyList())
+    val selectedSubjectId by viewModel.selectedSubjectId.collectAsState()
     val subjectById = remember(subjects) { subjects.associateBy { it.id } }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -172,6 +176,16 @@ fun BoardScreen(
                 onPickDate = { showDatePicker = true },
                 onBackToToday = viewModel::backToToday
             )
+
+            // 科目筛选行（OPTIMIZATION 收尾）
+            if (subjects.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                BoardSubjectFilter(
+                    subjects = subjects,
+                    selected = selectedSubjectId,
+                    onSelect = viewModel::selectSubject
+                )
+            }
 
             // 进度头部（当日完成率，动画更新）
             ProgressHeader(done = state.doneCount, total = state.tasks.size)
@@ -287,6 +301,58 @@ fun BoardScreen(
                 sheetTask = null
             }
         )
+    }
+}
+
+/** 看板科目筛选行（与卡片页交互一致） */
+@Composable
+private fun BoardSubjectFilter(
+    subjects: List<Subject>,
+    selected: Long?,
+    onSelect: (Long?) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item(key = "all") {
+            FilterChip(
+                selected = selected == null,
+                onClick = { onSelect(null) },
+                label = { Text("全部") }
+            )
+        }
+        items(subjects, key = { it.id }) { s ->
+            FilterChip(
+                selected = selected == s.id,
+                onClick = { onSelect(if (selected == s.id) null else s.id) },
+                label = { Text(s.name) },
+                leadingIcon = {
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(Color(s.color))
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color(s.color),
+                    selectedLabelColor = Color.White
+                )
+            )
+        }
+        item(key = "unassigned") {
+            FilterChip(
+                selected = selected == com.tomatodo.ui.cards.UNASSIGNED_SUBJECT_ID,
+                onClick = {
+                    onSelect(
+                        if (selected == com.tomatodo.ui.cards.UNASSIGNED_SUBJECT_ID) null
+                        else com.tomatodo.ui.cards.UNASSIGNED_SUBJECT_ID
+                    )
+                },
+                label = { Text("未分类") }
+            )
+        }
     }
 }
 
