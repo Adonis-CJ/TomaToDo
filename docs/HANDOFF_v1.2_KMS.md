@@ -3,6 +3,12 @@
 > 最后更新：2026-08-29 · 会话：v1.2 KMS 升级 + 番茄钟结束醒目提醒
 > 本文件是「上一个开发会话」的完整上下文快照，新会话只需读取本文件（+ `docs/UPGRADE_v1.2_KMS.md` 需求文档）即可接续工作。
 
+> **⚠ v1.3 进展更新（2026-08-29）**
+> - v1.2 全部改动已按功能域拆两个 commit 并推送 origin/main：`1903961`（KMS 升级）、`d65d112`（番茄钟提醒）。本文档 §4.3「提交 git」事项已完结。
+> - **§1.2 图片嵌入 bug 已定位根因**：`CardRepository.insertImage` 中 `inJustDecodeBounds=true` 的 `decodeStream` 按设计返回 null，导致 `openInputStream?.use{...} ?: return null` 恒触发——相册/拍照 100% 静默失败。v1.3 修复（见 [UPGRADE_v1.3_UI_MOTION.md](UPGRADE_v1.3_UI_MOTION.md)）。
+> - v1.3 升级（UI 质感 / 动效 / 规范）进行中：方案与状态见 [UPGRADE_v1.3_UI_MOTION.md](UPGRADE_v1.3_UI_MOTION.md) + [DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md)。
+> - Markwon 渲染层 API 备注仍然有效，改 `ui/cards/render/` 前先读本文件 §2.1。
+
 ## 1. 项目与基线
 
 - 项目：TomaTodo —— 考研人 Android 平板效率应用（Kotlin 2.2 + Compose M3，AGP 9 / Gradle 9.1 / KSP，minSdk 26 / targetSdk 36，Room 2.8.4 + DataStore + Coil 2.7，手动 DI `AppContainer`）。
