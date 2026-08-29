@@ -61,6 +61,7 @@ class TimerService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        AlarmNotifications.createChannel(this)
         scope.launch {
             (application as com.tomatodo.TomaTodoApplication).container
                 .settingsPreferences.settings.collect { s -> settings = s }
@@ -70,7 +71,9 @@ class TimerService : Service() {
             TimerController.state
                 .map { Triple(it.phase, it.isRunning, it.remainingMillis / 1000L) }
                 .distinctUntilChanged()
-                .collect { (_, _, _) ->
+                .collect { (phase, running, _) ->
+                    // 用户开始下一阶段即撤掉完成强提醒
+                    if (running) AlarmNotifications.cancel(this@TimerService)
                     val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     nm.notify(NOTIFICATION_ID, buildNotification(TimerController.state.value))
                 }
@@ -79,7 +82,7 @@ class TimerService : Service() {
             TimerController.events.collect { event ->
                 if (event is TimerController.TimerEvent.PhaseCompleted) {
                     if (event.phase == PomodoroType.FOCUS) recordFocusSession(event)
-                    playCompletion()
+                    playCompletion(event)
                 }
             }
         }
@@ -93,6 +96,7 @@ class TimerService : Service() {
             }
             ACTION_STOP -> {
                 TimerController.reset()
+                AlarmNotifications.cancel(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -159,23 +163,46 @@ class TimerService : Service() {
         )
     }
 
-    private fun playCompletion() {
+    /**
+     * 阶段完成提醒（v1.2「结束醒目」）：
+     * - 前台：ALARM 音频流三连音（媒体音量再小也响）+ 波形长震动，应用内另有全屏浮层；
+     * - 后台：ALARM 通知（默认闹钟铃声 + FLAG_INSISTENT 循环响铃 + fullScreenIntent 亮屏），
+     *   不再额外放 ToneGenerator 以免双重响铃；静音仅震动模式全程只震动。
+     */
+    private fun playCompletion(event: TimerController.TimerEvent.PhaseCompleted) {
         vibrate()
-        if (settings.vibrationOnly) return // 静音 + 仅震动
-        // 铃声生效（OPTIMIZATION 技术债 #1）：ringtoneId 映射音色，volume 独立控制
+        if (settings.vibrationOnly) return // 静音 + 仅震动：只给更长震动
+        val minutes = event.plannedMillis / 60_000L
+        if (AppForegroundTracker.isForeground) {
+            alarmToneTriple()
+        } else {
+            val title = if (event.phase == PomodoroType.FOCUS) "🍅 专注完成！" else "休息结束！"
+            val text = if (event.phase == PomodoroType.FOCUS) {
+                "已专注 $minutes 分钟，该休息了"
+            } else {
+                "休息了 $minutes 分钟，开始下一个专注吧"
+            }
+            AlarmNotifications.show(this, title, text)
+        }
+    }
+
+    /** ALARM 流三连音：比媒体流穿透力强，图书馆耳机场景也能听见 */
+    private fun alarmToneTriple() {
         try {
             val toneGen = ToneGenerator(
-                AudioManager.STREAM_MUSIC,
+                AudioManager.STREAM_ALARM,
                 (settings.volume * 100).toInt().coerceIn(0, 100)
             )
             val tone = when (settings.ringtoneId) {
-                "gentle" -> ToneGenerator.TONE_PROP_BEEP      // 轻柔：短促一声
-                "crisp" -> ToneGenerator.TONE_CDMA_PIP        // 清脆：高频短音
-                else -> ToneGenerator.TONE_PROP_BEEP2         // 默认：双音
+                "gentle" -> ToneGenerator.TONE_PROP_BEEP
+                "crisp" -> ToneGenerator.TONE_CDMA_PIP
+                else -> ToneGenerator.TONE_PROP_BEEP2
             }
-            toneGen.startTone(tone, if (settings.ringtoneId == "default") 400 else 200)
             scope.launch {
-                kotlinx.coroutines.delay(800)
+                repeat(3) {
+                    runCatching { toneGen.startTone(tone, 260) }
+                    kotlinx.coroutines.delay(480)
+                }
                 runCatching { toneGen.release() }
             }
         } catch (_: Exception) {
@@ -190,6 +217,12 @@ class TimerService : Service() {
             @Suppress("DEPRECATION")
             getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-        vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+        // 三段递进波形：比单次 500ms 更难被忽略
+        vibrator.vibrate(
+            VibrationEffect.createWaveform(
+                longArrayOf(0, 350, 220, 350, 220, 700),
+                -1
+            )
+        )
     }
 }

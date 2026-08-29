@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
     /** 悬浮窗仅在应用进入后台且计时进行时出现（用户反馈） */
     override fun onStop() {
         super.onStop()
+        com.tomatodo.timer.AppForegroundTracker.isForeground = false
         if (com.tomatodo.timer.TimerController.state.value.isRunning) {
             com.tomatodo.timer.FloatingWindowManager.show(this)
         }
@@ -63,6 +64,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.tomatodo.timer.AppForegroundTracker.isForeground = true
+        // 回到应用即停掉「完成提醒」的循环响铃通知
+        com.tomatodo.timer.AlarmNotifications.cancel(this)
         com.tomatodo.timer.FloatingWindowManager.hide()
     }
 }

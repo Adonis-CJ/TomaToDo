@@ -36,8 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.tomatodo.ui.board.BoardScreen
-import com.tomatodo.ui.cards.CardEditScreen
+import com.tomatodo.ui.cards.CardDetailScreen
 import com.tomatodo.ui.cards.CardsScreen
+import com.tomatodo.ui.cards.TrashScreen
 import com.tomatodo.ui.review.ReviewScreen
 import com.tomatodo.ui.settings.SettingsScreen
 import com.tomatodo.ui.stats.StatsScreen
@@ -85,31 +86,38 @@ private fun CountdownHeader() {
 @Composable
 fun MainScreen() {
     var selected by remember { mutableStateOf(Destination.Board) }
-    // 轻量路由：卡片撰写页（null = 关闭；cardId 为 null 表示新建）
-    var editingCardId by remember { mutableStateOf<Long?>(null) }
-    var editorOpen by remember { mutableStateOf(false) }
+    // 轻量路由：卡片详情覆盖层（viewerCardId 为 null 表示新建）
+    var viewerOpen by remember { mutableStateOf(false) }
+    var viewerCardId by remember { mutableStateOf<Long?>(null) }
+    var trashOpen by remember { mutableStateOf(false) }
     // 番茄沉浸式全屏：隐藏导航栏（外壳根据此状态只渲染计时页）
     var timerImmersive by remember { mutableStateOf(false) }
     // 番茄钟 ViewModel 提升至 MainScreen，看板可一键启动
     val timerViewModel: com.tomatodo.timer.TimerViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
+    // 番茄钟阶段完成全屏提醒（KMS v1.2 同期改进：结束更醒目）
+    PhaseCompletionOverlay(
+        timerViewModel = timerViewModel,
+        visible = !viewerOpen && !trashOpen
+    )
+
     AnimatedContent(
-        targetState = editorOpen,
+        targetState = Triple(viewerOpen, trashOpen, timerImmersive),
         transitionSpec = { fadeIn() togetherWith fadeOut() },
-        label = "editor",
+        label = "overlay",
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-    ) { inEditor ->
-        if (inEditor) {
-            CardEditScreen(
-                cardId = editingCardId,
-                onBack = { editorOpen = false }
+    ) { (inViewer, inTrash, immersive) ->
+        when {
+            inViewer -> CardDetailScreen(
+                cardId = viewerCardId,
+                onBack = { viewerOpen = false }
             )
-        } else {
-            Row(Modifier.fillMaxSize()) {
+            inTrash -> TrashScreen(onBack = { trashOpen = false })
+            else -> Row(Modifier.fillMaxSize()) {
                 // 沉浸式时隐藏导航栏，实现真·全屏（不重建计时页状态）
-                androidx.compose.animation.AnimatedVisibility(visible = !timerImmersive) {
+                androidx.compose.animation.AnimatedVisibility(visible = !immersive) {
                     Column {
                         NavigationRail {
                             // 顶部：考研倒计时
@@ -127,7 +135,7 @@ fun MainScreen() {
                         }
                     }
                 }
-                if (!timerImmersive) VerticalDivider()
+                if (!immersive) VerticalDivider()
                 // 内容区
                 when (selected) {
                     Destination.Board -> BoardScreen(
@@ -143,9 +151,14 @@ fun MainScreen() {
                     Destination.Review -> ReviewScreen()
                     Destination.Cards -> CardsScreen(
                         onEditCard = { id ->
-                            editingCardId = id
-                            editorOpen = true
-                        }
+                            viewerCardId = id
+                            viewerOpen = true
+                        },
+                        onOpenCard = { id ->
+                            viewerCardId = id
+                            viewerOpen = true
+                        },
+                        onOpenTrash = { trashOpen = true }
                     )
                     Destination.Stats -> StatsScreen()
                     Destination.Settings -> SettingsScreen()
