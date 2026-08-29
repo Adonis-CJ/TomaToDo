@@ -9,6 +9,11 @@
 > - v1.3 升级（UI 质感 / 动效 / 规范）进行中：方案与状态见 [UPGRADE_v1.3_UI_MOTION.md](UPGRADE_v1.3_UI_MOTION.md) + [DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md)。
 > - Markwon 渲染层 API 备注仍然有效，改 `ui/cards/render/` 前先读本文件 §2.1。
 
+> **⚠ v1.4 进展更新（2026-08-29）**
+> - 图片尺寸令牌已实现：`![](assets/x.jpg#w=NN)`（NN=1..99 画布宽百分比），由 `KmsImagePlugin` 注入 `ImageProps.IMAGE_SIZE` 复用内置 `ImageSizeResolverDef`；解析/写入纯函数在 `CardTextUtils`（`splitImageSize`/`withImageSize`/`imageTargets`），编辑工具栏预设 25/50/75/100。
+> - 查看器索引既有偏差已修：`CardDetailScreen`/`ReviewScreen` 改为按绝对路径匹配（原相对引用 `indexOf` 恒 -1，多图集恒开第一张）。
+> - 沉浸态翻页时钟重构为双叶片分瓣翻转（`timer/FlipClock.kt` + `Motion` 翻页令牌），并按 `:` 分段渲染修复 `H:MM:SS` 冒号错位。方案与状态见 [UPGRADE_v1.4_IMAGE_SIZE_FLIPCLOCK.md](UPGRADE_v1.4_IMAGE_SIZE_FLIPCLOCK.md)。
+
 ## 1. 项目与基线
 
 - 项目：TomaTodo —— 考研人 Android 平板效率应用（Kotlin 2.2 + Compose M3，AGP 9 / Gradle 9.1 / KSP，minSdk 26 / targetSdk 36，Room 2.8.4 + DataStore + Coil 2.7，手动 DI `AppContainer`）。
