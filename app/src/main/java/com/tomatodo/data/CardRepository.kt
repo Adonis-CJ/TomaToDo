@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import androidx.room.withTransaction
 import com.tomatodo.data.db.TomaTodoDatabase
 import com.tomatodo.data.model.CardTag
@@ -29,6 +30,10 @@ class CardRepository(
     private val filesDir: File get() = context.filesDir
     private val cardDao = db.knowledgeCardDao()
     private val tagDao = db.tagDao()
+
+    private companion object {
+        const val TAG = "CardRepository"
+    }
 
     // ---- 一次性启动迁移 ----
 
@@ -137,17 +142,23 @@ class CardRepository(
     suspend fun insertImage(cardId: Long, uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
             val resolver = context.contentResolver
+            // inJustDecodeBounds 时 decodeStream 恒返回 null（只填 bounds），判空对象必须是流而非解码结果
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                ?: return@withContext null
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                Log.e(TAG, "insertImage: unreadable image uri=$uri")
+                return@runCatching null
+            }
 
             var sample = 1
             while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1600) sample *= 2
             val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
             val decoded = resolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, decodeOpts)
-            } ?: return@withContext null
+            } ?: run {
+                Log.e(TAG, "insertImage: stream closed between passes uri=$uri")
+                return@runCatching null
+            }
 
             val maxDim = maxOf(decoded.width, decoded.height)
             val bitmap = if (maxDim > 1600) {
@@ -168,6 +179,8 @@ class CardRepository(
             target.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out) }
             bitmap.recycle()
             "${CardTextUtils.ASSETS_DIR_NAME}/${target.name}"
+        }.onFailure {
+            Log.e(TAG, "insertImage: card=$cardId uri=$uri", it)
         }.getOrNull()
     }
 

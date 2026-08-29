@@ -7,6 +7,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -25,12 +29,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -53,11 +59,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,6 +77,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,7 +95,9 @@ import com.tomatodo.data.model.CardType
 import com.tomatodo.data.model.Subject
 import com.tomatodo.ui.cards.render.MarkdownText
 import com.tomatodo.ui.theme.AppSerif
+import com.tomatodo.ui.theme.Motion
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -131,6 +143,12 @@ fun CardDetailScreen(
     var viewerIndex by remember { mutableIntStateOf(0) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    fun onImageInsertFailed() {
+        scope.launch { snackbar.showSnackbar("图片插入失败，请重试") }
+    }
 
     LaunchedEffect(cardId) { viewModel.load(cardId) }
     LaunchedEffect(detail) {
@@ -196,24 +214,31 @@ fun CardDetailScreen(
         cameraTemp = null
         if (ok && temp != null) {
             viewModel.insertImage(
-                currentCardId, content.text, subjectId, type, source, tags, temp.first
-            ) { id, ref ->
-                currentCardId = id
-                if (ref != null) insertAtCursor({ content = it }, content, "\n![]($ref)\n")
-            }
+                currentCardId, content.text, subjectId, type, source, tags, temp.first,
+                onResult = { id, ref ->
+                    currentCardId = id
+                    if (ref != null) insertAtCursor({ content = it }, content, "\n![]($ref)\n")
+                    else onImageInsertFailed()
+                },
+                // 临时文件须等 IO 消费完再删（cleanup 在协程 finally 中必达）
+                cleanup = { viewModel.discardCameraTemp(temp.second) }
+            )
+        } else {
+            viewModel.discardCameraTemp(temp?.second)
         }
-        viewModel.discardCameraTemp(temp?.second)
     }
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             viewModel.insertImage(
-                currentCardId, content.text, subjectId, type, source, tags, uri
-            ) { id, ref ->
-                currentCardId = id
-                if (ref != null) insertAtCursor({ content = it }, content, "\n![]($ref)\n")
-            }
+                currentCardId, content.text, subjectId, type, source, tags, uri,
+                onResult = { id, ref ->
+                    currentCardId = id
+                    if (ref != null) insertAtCursor({ content = it }, content, "\n![]($ref)\n")
+                    else onImageInsertFailed()
+                }
+            )
         }
     }
 
@@ -232,70 +257,73 @@ fun CardDetailScreen(
         )
     }
 
-    when (mode) {
-        DetailMode.READ -> ReadView(
-            detail = detail,
-            subjects = subjects,
-            tags = tags,
-            content = content.text,
-            baseDir = baseDir,
-            onBack = ::handleBack,
-            onEdit = { mode = DetailMode.EDIT },
-            onTrash = { confirmTrash = true },
-            onImageClick = { dest ->
-                val id = currentCardId ?: return@ReadView
-                val refs = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
-                    .findAll(content.text).map { it.groupValues[1] }.toList()
-                val files = refs.map { viewModel.assetFile(id, it) }.filter { it.exists() }
-                viewerIndex = refs.indexOf(dest).coerceAtLeast(0)
-                viewerImages = files
-            }
-        )
+    Box(Modifier.fillMaxSize()) {
+        when (mode) {
+            DetailMode.READ -> ReadView(
+                detail = detail,
+                subjects = subjects,
+                tags = tags,
+                content = content.text,
+                baseDir = baseDir,
+                onBack = ::handleBack,
+                onEdit = { mode = DetailMode.EDIT },
+                onTrash = { confirmTrash = true },
+                onImageClick = { dest ->
+                    val id = currentCardId ?: return@ReadView
+                    val refs = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
+                        .findAll(content.text).map { it.groupValues[1] }.toList()
+                    val files = refs.map { viewModel.assetFile(id, it) }.filter { it.exists() }
+                    viewerIndex = refs.indexOf(dest).coerceAtLeast(0)
+                    viewerImages = files
+                }
+            )
 
-        DetailMode.EDIT -> EditView(
-            content = content,
-            onContentChange = { content = it },
-            subjects = subjects,
-            subjectId = subjectId,
-            onSubjectChange = { subjectId = it },
-            type = type,
-            onTypeChange = { type = it },
-            source = source,
-            onSourceChange = { source = it },
-            tags = tags,
-            onTagsChange = { tags = it },
-            tagInput = tagInput,
-            onTagInputChange = { tagInput = it },
-            allTags = allTags,
-            saving = saving,
-            lastSavedAt = lastSavedAt,
-            showPreview = showPreview,
-            onTogglePreview = { showPreview = !showPreview },
-            onBack = ::handleBack,
-            onToggleRead = { doSave { mode = DetailMode.READ } },
-            baseDir = baseDir,
-            onCamera = {
-                val pair = viewModel.newCameraImage()
-                cameraTemp = pair
-                cameraLauncher.launch(pair.first)
-            },
-            onGallery = {
-                galleryLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            },
-            onFormulaMenu = { formulaMenu = true },
-            formulaMenu = formulaMenu,
-            onFormulaDismiss = { formulaMenu = false },
-            onInsertFormula = { snippet -> insertAtCursor({ content = it }, content, "\$\$$snippet\$\$") },
-            onTemplateMenu = { templateMenu = true },
-            templateMenu = templateMenu,
-            onTemplateDismiss = { templateMenu = false },
-            onInsertTemplate = { template -> content = TextFieldValue(template) },
-            onInsertToolbar = { text, cursorBack -> insertAtCursor({ content = it }, content, text, cursorBack) },
-            onLineStartInsert = { prefix -> insertAtLineStart({ content = it }, content, prefix) },
-            onWrapSelection = { wrap -> wrapSelection({ content = it }, content, wrap) }
-        )
+            DetailMode.EDIT -> EditView(
+                content = content,
+                onContentChange = { content = it },
+                subjects = subjects,
+                subjectId = subjectId,
+                onSubjectChange = { subjectId = it },
+                type = type,
+                onTypeChange = { type = it },
+                source = source,
+                onSourceChange = { source = it },
+                tags = tags,
+                onTagsChange = { tags = it },
+                tagInput = tagInput,
+                onTagInputChange = { tagInput = it },
+                allTags = allTags,
+                saving = saving,
+                lastSavedAt = lastSavedAt,
+                showPreview = showPreview,
+                onTogglePreview = { showPreview = !showPreview },
+                onBack = ::handleBack,
+                onToggleRead = { doSave { mode = DetailMode.READ } },
+                baseDir = baseDir,
+                onCamera = {
+                    val pair = viewModel.newCameraImage()
+                    cameraTemp = pair
+                    cameraLauncher.launch(pair.first)
+                },
+                onGallery = {
+                    galleryLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onFormulaMenu = { formulaMenu = true },
+                formulaMenu = formulaMenu,
+                onFormulaDismiss = { formulaMenu = false },
+                onInsertFormula = { snippet -> insertAtCursor({ content = it }, content, "\$\$$snippet\$\$") },
+                onTemplateMenu = { templateMenu = true },
+                templateMenu = templateMenu,
+                onTemplateDismiss = { templateMenu = false },
+                onInsertTemplate = { template -> content = TextFieldValue(template) },
+                onInsertToolbar = { text, cursorBack -> insertAtCursor({ content = it }, content, text, cursorBack) },
+                onLineStartInsert = { prefix -> insertAtLineStart({ content = it }, content, prefix) },
+                onWrapSelection = { wrap -> wrapSelection({ content = it }, content, wrap) }
+            )
+        }
+        SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
 
     if (confirmTrash) {
@@ -371,35 +399,41 @@ private fun ReadView(
             }
         }
 
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
         // 标签行
         if (tags.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 24.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
             ) {
                 tags.forEach { TagChip(it) }
             }
-            Spacer(Modifier.height(8.dp))
         }
 
-        // 正文渲染区
+        // 正文渲染区（平板限宽 720dp 居中，保证可读行长）
         Box(Modifier.weight(1f)) {
             Column(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                MarkdownText(
-                    markdown = content,
-                    baseDir = baseDir,
-                    textSize = 16.sp,
-                    onImageClick = onImageClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(24.dp))
+                Column(Modifier.widthIn(max = 720.dp)) {
+                    MarkdownText(
+                        markdown = content,
+                        baseDir = baseDir,
+                        textSize = 16.sp,
+                        onImageClick = onImageClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
         // 元信息条
         Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)) {
@@ -484,11 +518,17 @@ private fun EditView(
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                 }
-                Text(
-                    if (saving) "保存中…" else lastSavedAt?.let { "已保存 ${dateFormat.format(Date(it))}" } ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                AnimatedContent(
+                    targetState = if (saving) "保存中…" else lastSavedAt?.let { "已保存 ${dateFormat.format(Date(it))}" } ?: "",
+                    transitionSpec = { fadeIn(Motion.enter()) togetherWith fadeOut(Motion.exit()) },
+                    label = "saveStatus"
+                ) { text ->
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 if (!wide) {
                     IconButton(onClick = onTogglePreview) {
@@ -503,21 +543,23 @@ private fun EditView(
                 TextButton(onClick = onToggleRead) { Text("阅读") }
             }
 
-            // 工具栏（预览态隐藏）
+            // 工具栏（预览态隐藏；发丝分隔条带）
             if (!showPreview || wide) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     ToolIcon(Icons.Outlined.Title, "标题") { onLineStartInsert("# ") }
                     ToolIcon(Icons.Outlined.FormatBold, "加粗") { onWrapSelection("**" to "**") }
                     ToolIcon(Icons.Outlined.FormatItalic, "斜体") { onWrapSelection("*" to "*") }
                     ToolIcon(Icons.Outlined.FormatStrikethrough, "删除线") { onWrapSelection("~~" to "~~") }
-                    ToolIcon(Icons.Outlined.FormatListBulleted, "列表") { onLineStartInsert("- ") }
+                    ToolIcon(Icons.AutoMirrored.Outlined.FormatListBulleted, "列表") { onLineStartInsert("- ") }
                     ToolIcon(Icons.Outlined.FormatQuote, "引用") { onLineStartInsert("> ") }
                     ToolIcon(Icons.Outlined.Code, "代码块") { onInsertToolbar("\n```\n\n```\n", 5) }
                     ToolIcon(Icons.Outlined.TableChart, "表格") {
@@ -564,6 +606,8 @@ private fun EditView(
                     }
                     ToolIcon(Icons.Outlined.PhotoCamera, "拍照") { onCamera() }
                     ToolIcon(Icons.Outlined.Image, "相册") { onGallery() }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
 

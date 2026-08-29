@@ -106,7 +106,7 @@ class CardDetailViewModel(application: Application) : AndroidViewModel(applicati
 
     /**
      * 插入图片：新建未保存的卡片先落一次盘拿到 id，再压缩图片进 assets。
-     * 返回 (卡片id, 相对引用)。
+     * 返回 (卡片id, 相对引用)；cleanup 在消费完成后必达（成功/失败/取消），供临时文件清理。
      */
     fun insertImage(
         cardId: Long?,
@@ -116,15 +116,20 @@ class CardDetailViewModel(application: Application) : AndroidViewModel(applicati
         source: String?,
         tags: List<String>,
         uri: Uri,
-        onResult: (Long, String?) -> Unit
+        onResult: (Long, String?) -> Unit,
+        cleanup: () -> Unit = {}
     ) {
         viewModelScope.launch {
-            val id = cardId ?: repo.save(
-                CardRepository.SaveInput(null, pendingContent, subjectId, type, source, tags)
-            ).takeIf { it != 0L } ?: return@launch
-            val ref = repo.insertImage(id, uri)
-            if (ref != null) _lastSavedAt.value = System.currentTimeMillis()
-            onResult(id, ref)
+            try {
+                val id = cardId ?: repo.save(
+                    CardRepository.SaveInput(null, pendingContent, subjectId, type, source, tags)
+                ).takeIf { it != 0L } ?: return@launch
+                val ref = repo.insertImage(id, uri)
+                if (ref != null) _lastSavedAt.value = System.currentTimeMillis()
+                onResult(id, ref)
+            } finally {
+                cleanup()
+            }
         }
     }
 
