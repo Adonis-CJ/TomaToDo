@@ -1,6 +1,5 @@
 package com.tomatodo.timer
 
-import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,13 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.tomatodo.data.model.PomodoroType
@@ -62,16 +56,14 @@ import java.io.File
 
 @Composable
 fun TimerScreen(
-    onImmersiveChanged: (Boolean) -> Unit = {},
     viewModel: TimerViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val needOverlay by viewModel.needOverlayPermission.collectAsState()
+    val immersive by viewModel.isImmersive.collectAsState()
     val context = LocalContext.current
-    val view = LocalView.current
 
-    var immersive by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
     val progress = if (state.totalMillis > 0L) {
         state.remainingMillis.toFloat() / state.totalMillis.toFloat()
@@ -79,31 +71,14 @@ fun TimerScreen(
         1f
     }
 
-    // 计时开始 3s 后自动进入沉浸式（用户需求）
+    // 计时开始 3s 后自动进入沉浸式（用户需求）；暂停/停止自动退出
     LaunchedEffect(state.isRunning) {
         if (state.isRunning) {
             delay(3000)
-            if (state.isRunning) immersive = true
+            if (state.isRunning) viewModel.enterImmersive()
         } else {
-            immersive = false
+            viewModel.exitImmersive()
         }
-    }
-
-    // 通知外壳隐藏导航栏，实现真·全屏沉浸
-    LaunchedEffect(immersive) { onImmersiveChanged(immersive) }
-
-    // 沉浸式隐藏系统栏，退出恢复
-    DisposableEffect(immersive) {
-        val controller = (context as? Activity)?.window
-            ?.let { WindowCompat.getInsetsController(it, view) }
-        if (immersive && controller != null) {
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } else {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-        }
-        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
     // 沉浸式中控制层 3s 无操作自动隐藏
@@ -150,11 +125,8 @@ fun TimerScreen(
             onToggleControls = { showControls = !showControls },
             onToggleRun = { if (state.isRunning) viewModel.pause() else viewModel.start() },
             onSkip = viewModel::skip,
-            onStop = {
-                immersive = false
-                viewModel.reset()
-            },
-            onExit = { immersive = false }
+            onStop = { viewModel.reset() },
+            onExit = { viewModel.exitImmersive() }
         )
     } else {
         NormalTimerContent(
@@ -168,7 +140,7 @@ fun TimerScreen(
             onPause = viewModel::pause,
             onReset = viewModel::reset,
             onSkip = viewModel::skip,
-            onImmersive = { immersive = true }
+            onImmersive = { viewModel.enterImmersive() }
         )
     }
 }

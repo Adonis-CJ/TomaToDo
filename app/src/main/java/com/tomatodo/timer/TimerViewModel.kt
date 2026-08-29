@@ -35,6 +35,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     /** 悬浮窗权限缺失（OPTIMIZATION 技术债 #6）：置位后由 UI 弹引导 */
     val needOverlayPermission = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /** 沉浸态（v1.5 §2）：单一事实源——外壳与计时页各自收集，替代回调往返（重建丢态/震荡根因） */
+    val isImmersive = kotlinx.coroutines.flow.MutableStateFlow(false)
+    fun enterImmersive() { isImmersive.value = true }
+    fun exitImmersive() { isImmersive.value = false }
+
     init {
         viewModelScope.launch {
             prefs.settings.collect { s ->
@@ -67,6 +72,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun reset() {
         TimerController.reset()
         TimerService.stop(getApplication())
+        isImmersive.value = false
     }
 
     fun skip() = TimerController.skip()

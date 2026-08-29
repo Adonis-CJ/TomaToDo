@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,10 +95,10 @@ fun MainScreen() {
     var viewerOpen by remember { mutableStateOf(false) }
     var viewerCardId by remember { mutableStateOf<Long?>(null) }
     var trashOpen by remember { mutableStateOf(false) }
-    // 番茄沉浸式全屏：隐藏导航栏（外壳根据此状态只渲染计时页）
-    var timerImmersive by remember { mutableStateOf(false) }
     // 番茄钟 ViewModel 提升至 MainScreen，看板可一键启动
     val timerViewModel: com.tomatodo.timer.TimerViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    // 沉浸态单一事实源（v1.5 §2）：导航栏渲染跟随此流，替代回调往返
+    val timerImmersive by timerViewModel.isImmersive.collectAsState()
 
     // 番茄钟阶段完成全屏提醒（KMS v1.2 同期改进：结束更醒目）
     PhaseCompletionOverlay(
@@ -171,7 +172,6 @@ fun MainScreen() {
                             }
                         )
                         Destination.Timer -> TimerScreen(
-                            onImmersiveChanged = { timerImmersive = it },
                             viewModel = timerViewModel
                         )
                         Destination.Review -> ReviewScreen()
