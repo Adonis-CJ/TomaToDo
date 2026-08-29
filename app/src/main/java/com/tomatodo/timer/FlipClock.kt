@@ -1,15 +1,12 @@
 package com.tomatodo.timer
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -36,15 +33,26 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tomatodo.ui.theme.AppMono
+import com.tomatodo.ui.theme.Motion
+import kotlin.math.abs
 
 /**
- * 翻页钟（用户反馈重做版）：4 张数字卡相互分离、哑光黑、整卡绕中线翻转的翻页效果。
+ * 翻页钟（v1.4 重构）：真实分瓣（split-flap）两段翻转——
+ * 上瓣（旧值上半）绕中缝向观者倒下（0 → -90°），露出静态页上的新值上半；
+ * 下瓣（新值下半）从垂直位（+90°）绕中缝落位盖住旧值下半。
+ * 透视（cameraDistance）+ 随角度渐深的遮光，节奏走 Motion 翻页令牌。
  */
 
-/**
- * 单张数字卡：台历翻页——只动上半片绕水平中轴向下翻（0 → -180°），下半片静止。
- * 后半段换新值并加镜像抵消（避免翻过去时反字），翻页完成整卡更新。
- */
+// 沉浸态纯黑视觉（独立于「墨·纸」暖色调色板）
+private val CardBg = Color(0xFF161618)
+private val CardBorder = Color(0xFF26262A)
+private val DigitColor = Color(0xFFF5F2EC)
+private val ColonColor = Color(0xFF4A4A50)
+private val Corner = 16.dp
+private const val FLAP_SHADE_MAX = 0.4f
+// cameraDistance 单位是「图层最长边的倍数」（Compose 默认 8 倍 = 几乎无透视），3 倍 = 适度纵深感
+private const val CAMERA_DISTANCE = 3f
+
 @Composable
 fun FlipCard(
     text: String,
@@ -53,87 +61,129 @@ fun FlipCard(
     fontSize: Int = 104,
     modifier: Modifier = Modifier
 ) {
-    var shown by remember { mutableStateOf(text) }
-    val flip = remember { Animatable(0f) }
+    var current by remember { mutableStateOf(text) }
+    var previous by remember { mutableStateOf(text) }
+    var animating by remember { mutableStateOf(false) }
+    val progress = remember { Animatable(0f) }
 
     LaunchedEffect(text) {
-        if (shown == text) return@LaunchedEffect
-        flip.snapTo(0f)
-        flip.animateTo(-180f, tween(420, easing = FastOutSlowInEasing))
-        shown = text
-        flip.snapTo(0f)
+        if (text == current) return@LaunchedEffect
+        previous = current
+        current = text
+        animating = true
+        progress.snapTo(0f)
+        progress.animateTo(0.5f, Motion.flipDown())
+        progress.animateTo(1f, Motion.flipLand())
+        animating = false
+        previous = current
     }
 
-    val half = cardHeight / 2
-    // 上半翻页内容：前半(0..-90)显示旧值，后半(-90..-180)显示新值
-    val topContent = if (flip.value <= -90f) text else shown
+    val p = progress.value
 
     Box(
         modifier
             .width(cardWidth)
             .height(cardHeight)
-            .background(Color(0xFF161618), RoundedCornerShape(16.dp))
-            .border(1.dp, Color(0xFF26262A), RoundedCornerShape(16.dp))
+            .background(CardBg, RoundedCornerShape(Corner))
+            .border(1.dp, CardBorder, RoundedCornerShape(Corner))
     ) {
-        // ------------------ 下半片（静止，显示数字下半）------------------
-        // 内部数字盒以整卡高 cardHeight 铺放并上移 half，使其中心落在卡片中线，实现中线截断。
-        Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(half)
-                .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(cardHeight)
-                    .offset(y = -half),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    shown, color = Color(0xFFF5F2EC), fontSize = fontSize.sp,
-                    fontWeight = FontWeight.Medium, fontFamily = AppMono
-                )
-            }
-        }
-        // ------------------ 上半片（向下翻页，显示数字上半）------------------
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(half)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .graphicsLayer {
-                    rotationX = flip.value
-                    transformOrigin = TransformOrigin(0.5f, 1f) // 绕底边（水平中轴）旋转
-                },
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(cardHeight)
-                    .offset(y = 0.dp)
-                    .graphicsLayer {
-                        if (flip.value <= -90f) rotationX = 180f // 翻过半后抵消上下颠倒
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    topContent, color = Color(0xFFF5F2EC), fontSize = fontSize.sp,
-                    fontWeight = FontWeight.Medium, fontFamily = AppMono
-                )
-            }
-        }
+        // 静态页：上半恒显新值（随上瓣倒下逐渐露出），下半恒显旧值（等待下瓣落位覆盖）
+        HalfDigit(current, top = true, cardWidth, cardHeight, fontSize, Modifier.align(Alignment.TopCenter))
+        HalfDigit(previous, top = false, cardWidth, cardHeight, fontSize, Modifier.align(Alignment.BottomCenter))
+
         // 中缝（翻页轴）
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(2.dp)
-                .background(Color(0xFF000000))
+                .background(Color.Black)
                 .align(Alignment.Center)
+        )
+
+        if (animating) {
+            if (p < 0.5f) {
+                // 上瓣：旧值上半，绕中缝向观者翻离（0 → -90°）
+                FlapHalf(
+                    angle = -180f * p,
+                    topFlap = true,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                ) {
+                    HalfDigit(previous, top = true, cardWidth, cardHeight, fontSize)
+                }
+            } else {
+                // 下瓣：新值下半，绕中缝自垂直位落位（+90° → 0）
+                FlapHalf(
+                    angle = 180f * (1f - p),
+                    topFlap = false,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    HalfDigit(current, top = false, cardWidth, cardHeight, fontSize)
+                }
+            }
+        }
+    }
+}
+
+/** 数字的一半（上/下半片）：整卡高的数字按中缝裁切，保留该侧圆角 */
+@Composable
+private fun HalfDigit(
+    value: String,
+    top: Boolean,
+    cardWidth: Dp,
+    cardHeight: Dp,
+    fontSize: Int,
+    modifier: Modifier = Modifier
+) {
+    val half = cardHeight / 2
+    Box(
+        modifier
+            .width(cardWidth)
+            .height(half)
+            .clip(
+                if (top) RoundedCornerShape(topStart = Corner, topEnd = Corner)
+                else RoundedCornerShape(bottomStart = Corner, bottomEnd = Corner)
+            ),
+        contentAlignment = if (top) Alignment.TopCenter else Alignment.BottomCenter
+    ) {
+        Box(
+            Modifier
+                .width(cardWidth)
+                .height(cardHeight)
+                .offset(y = if (top) 0.dp else -half),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                value,
+                color = DigitColor,
+                fontSize = fontSize.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = AppMono
+            )
+        }
+    }
+}
+
+/** 翻转瓣（上瓣翻离 / 下瓣落位）：透视旋转 + 随角度渐深的遮光层 */
+@Composable
+private fun FlapHalf(
+    angle: Float,
+    topFlap: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier.graphicsLayer {
+            rotationX = angle
+            transformOrigin = if (topFlap) TransformOrigin(0.5f, 1f) else TransformOrigin(0.5f, 0f)
+            cameraDistance = CAMERA_DISTANCE
+        }
+    ) {
+        content()
+        val shade = (abs(angle) / 90f).coerceIn(0f, 1f) * FLAP_SHADE_MAX
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = shade))
         )
     }
 }
@@ -142,45 +192,46 @@ fun FlipCard(
 @Composable
 private fun FlipColon(height: Dp) {
     Box(
-        Modifier.height(height).padding(horizontal = 6.dp),
+        Modifier
+            .height(height)
+            .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier
                     .size(12.dp)
-                    .background(Color(0xFF4A4A50), CircleShape)
+                    .background(ColonColor, CircleShape)
             )
             Box(Modifier.height(18.dp))
             Box(
                 Modifier
                     .size(12.dp)
-                    .background(Color(0xFF4A4A50), CircleShape)
+                    .background(ColonColor, CircleShape)
             )
         }
     }
 }
 
 /**
- * 翻页钟组合：`MM:SS`（分钟可为 3 位），卡片相互分离。
+ * 翻页钟组合：按 `:` 分段渲染（`MM:SS` / `H:MM:SS` 均正确），段间插冒号，卡片相互分离。
  */
 @Composable
 fun FlipClock(
     remainingText: String,
     modifier: Modifier = Modifier
 ) {
-    val digits = remainingText.filter { it.isDigit() }
-    val hasColon = remainingText.contains(':')
+    val segments = remainingText.split(':').filter { it.isNotEmpty() }
     Row(
         modifier,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        digits.forEachIndexed { index, ch ->
-            FlipCard(text = ch.toString())
-            if (hasColon && index == digits.length - 3) {
-                FlipColon(216.dp)
+        segments.forEachIndexed { index, segment ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                segment.forEach { ch -> FlipCard(text = ch.toString()) }
             }
+            if (index < segments.lastIndex) FlipColon(216.dp)
         }
     }
 }
