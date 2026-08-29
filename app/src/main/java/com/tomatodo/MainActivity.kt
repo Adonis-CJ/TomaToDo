@@ -1,6 +1,7 @@
 package com.tomatodo
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,16 +9,25 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.tomatodo.data.preferences.ThemeMode
+import com.tomatodo.timer.TimerController
 import com.tomatodo.ui.MainScreen
 import com.tomatodo.ui.theme.TomaTodoTheme
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        hideSystemBars()
         requestNotificationPermissionIfNeeded()
+        keepScreenOnWhileTiming()
 
         val app = application as TomaTodoApplication
         setContent {
@@ -33,6 +43,36 @@ class MainActivity : ComponentActivity() {
 
             TomaTodoTheme(darkTheme = darkTheme) {
                 MainScreen()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 从权限设置页等其他界面返回后恢复全屏
+        hideSystemBars()
+    }
+
+    /** 全局全屏（v1.5 §1）：隐藏状态栏 + 导航栏，边缘轻扫临时唤出并自动隐藏 */
+    private fun hideSystemBars() {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    /** 计时防睡眠（v1.5 §3）：前台运行中保持亮屏，暂停/结束即归还系统默认息屏策略 */
+    private fun keepScreenOnWhileTiming() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TimerController.state.collect { st ->
+                    if (st.isRunning) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
             }
         }
     }
