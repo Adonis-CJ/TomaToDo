@@ -4,11 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomatodo.TomaTodoApplication
+import com.tomatodo.data.CardTextUtils
 import com.tomatodo.data.ReviewResult
 import com.tomatodo.data.computeReviewOutcome
 import com.tomatodo.data.model.KnowledgeCard
 import com.tomatodo.data.model.ReviewRecord
 import com.tomatodo.data.model.Subject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,21 +21,26 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReviewViewModel(application: Application) : AndroidViewModel(application) {
-    private val db = (application as TomaTodoApplication).container.database
-    private val cardDao = db.knowledgeCardDao()
-    private val subjectDao = db.subjectDao()
-    private val recordDao = db.reviewRecordDao()
+    private val container = (application as TomaTodoApplication).container
+    private val cardDao = container.database.knowledgeCardDao()
+    private val subjectDao = container.database.subjectDao()
+    private val recordDao = container.database.reviewRecordDao()
+    private val filesDir = application.filesDir
 
     /** 每分钟心跳，驱动 due 查询跨天刷新（OPTIMIZATION 技术债 #9） */
     private val _now = MutableStateFlow(System.currentTimeMillis())
     val now: StateFlow<Long> = _now.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            container.cardRepository.ensureMigrated()
+        }
         viewModelScope.launch {
             while (isActive) {
                 delay(60_000)
@@ -55,6 +62,16 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
     init {
         refreshReviewedToday()
     }
+
+    /** 读取卡片正文 note.md（KMS v1.2） */
+    suspend fun readNote(cardId: Long): String =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val f = CardTextUtils.noteFileFor(filesDir, cardId)
+            if (f.exists()) f.readText() else ""
+        }
+
+    /** 正文渲染基准目录（相对路径图片解析） */
+    fun baseDirFor(cardId: Long): File = CardTextUtils.cardDirFor(filesDir, cardId)
 
     fun refreshReviewedToday() {
         viewModelScope.launch {

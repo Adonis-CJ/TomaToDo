@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Button
@@ -31,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,12 +46,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tomatodo.data.CardTextUtils
 import com.tomatodo.data.ReviewResult
 import com.tomatodo.data.model.KnowledgeCard
 import com.tomatodo.data.model.Subject
+import com.tomatodo.ui.cards.ImageViewerDialog
+import com.tomatodo.ui.cards.render.MarkdownText
+import com.tomatodo.ui.theme.AppSerif
+import java.io.File
 
 /**
- * 复习页（OPTIMIZATION §6 刷题模式）：单卡沉浸 + 进度 x/y + 完成小结。
+ * 复习页（KMS v1.2）：单卡沉浸刷题。
+ * 问面 = 正文首个 `---` 之前（无分隔线时用标题+摘要），答面 = 其后全文；
+ * 两者均以 MD+LaTeX 渲染，图片可点开全屏。
  */
 @Composable
 fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
@@ -58,9 +68,18 @@ fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
 
     var index by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
+    var content by remember { mutableStateOf("") }
+    var viewerImages by remember { mutableStateOf<List<File>>(emptyList()) }
+    var viewerIndex by remember { mutableIntStateOf(0) }
 
     val subjectById = remember(subjects) { subjects.associateBy { it.id } }
     val current = dueCards.getOrNull(index)
+
+    // 换卡即加载正文
+    LaunchedEffect(current?.id) {
+        content = current?.let { viewModel.readNote(it.id) } ?: ""
+        revealed = false
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -155,17 +174,36 @@ fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
                     ReviewCard(
                         card = card,
                         subject = subjectById[card.subjectId],
+                        content = if (card.id == current?.id) content else "",
+                        baseDir = viewModel.baseDirFor(card.id),
                         revealed = revealed,
                         onReveal = { revealed = true },
                         onResult = { result ->
                             viewModel.review(card, result)
                             revealed = false
                             index += 1
+                        },
+                        onImageClick = { dest ->
+                            val refs = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
+                                .findAll(content).map { it.groupValues[1] }.toList()
+                            val files = refs.map { r ->
+                                File(viewModel.baseDirFor(card.id), r.removePrefix("./"))
+                            }.filter { it.exists() }
+                            viewerIndex = refs.indexOf(dest).coerceAtLeast(0)
+                            viewerImages = files
                         }
                     )
                 }
             }
         }
+    }
+
+    if (viewerImages.isNotEmpty()) {
+        ImageViewerDialog(
+            images = viewerImages,
+            initialIndex = viewerIndex,
+            onDismiss = { viewerImages = emptyList() }
+        )
     }
 }
 
@@ -173,10 +211,19 @@ fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
 private fun ReviewCard(
     card: KnowledgeCard,
     subject: Subject?,
+    content: String,
+    baseDir: File,
     revealed: Boolean,
     onReveal: () -> Unit,
-    onResult: (ReviewResult) -> Unit
+    onResult: (ReviewResult) -> Unit,
+    onImageClick: (String) -> Unit
 ) {
+    val (question, answer) = remember(card.id, content) {
+        CardTextUtils.splitQuestionAnswer(content)
+    }
+    // 无分隔线的卡片：问面退化为标题 + 摘要
+    val questionMd = question ?: "# ${card.title}\n\n${card.excerpt}"
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -206,15 +253,47 @@ private fun ReviewCard(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text(card.front, style = MaterialTheme.typography.headlineMedium)
-            if (revealed) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    card.back,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.secondary
+
+            Column(
+                Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // 问面（始终渲染）
+                MarkdownText(
+                    markdown = questionMd,
+                    baseDir = baseDir,
+                    onImageClick = onImageClick,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(24.dp))
+
+                if (revealed) {
+                    Spacer(Modifier.height(20.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "答案",
+                                style = MaterialTheme.typography.labelLarge.copy(fontFamily = AppSerif),
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            MarkdownText(
+                                markdown = answer,
+                                baseDir = baseDir,
+                                onImageClick = onImageClick,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            if (revealed) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { onResult(ReviewResult.FORGET) },
@@ -231,7 +310,6 @@ private fun ReviewCard(
                     ) { Text("记得") }
                 }
             } else {
-                Spacer(Modifier.height(24.dp))
                 OutlinedButton(onClick = onReveal) { Text("查看答案") }
             }
         }

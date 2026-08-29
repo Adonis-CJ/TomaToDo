@@ -19,4 +19,9 @@ class AppContainer(context: Context) {
     val settingsPreferences: SettingsPreferences by lazy {
         SettingsPreferences(appContext)
     }
+
+    /** 知识卡片仓库（KMS v1.2 文件+索引唯一写入口） */
+    val cardRepository: CardRepository by lazy {
+        CardRepository(appContext, database)
+    }
 }

@@ -19,6 +19,17 @@ class TomaTodoApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
         seedDefaultSubjects()
+        ensureCardMigration()
+    }
+
+    /** KMS v1.2：旧 front/back 正文文件化迁移（幂等）+ 回收站 30 天惰性清理 */
+    private fun ensureCardMigration() {
+        appScope.launch {
+            runCatching {
+                container.cardRepository.ensureMigrated()
+                container.cardRepository.purgeExpired()
+            }
+        }
     }
 
     private fun seedDefaultSubjects() {

@@ -56,6 +56,13 @@ dependencies {
     // 图片加载
     implementation(libs.coil.compose)
 
+    // Markdown / LaTeX 渲染（KMS v1.2）：Markwon + JLatexMath；图片插件自研（官方 image-coil 绑定 Coil 1.x，与项目 Coil 2.7 类冲突）
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.ext.latex)
+    implementation(libs.markwon.ext.tables)
+    implementation(libs.markwon.ext.strikethrough)
+    implementation(libs.markwon.ext.tasklist)
+
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)
