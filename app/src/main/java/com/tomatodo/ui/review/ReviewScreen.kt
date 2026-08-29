@@ -189,13 +189,18 @@ fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
                             index += 1
                         },
                         onImageClick = { dest ->
-                            val refs = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
-                                .findAll(content).map { it.groupValues[1] }.toList()
-                            val files = refs.map { r ->
-                                File(viewModel.baseDirFor(card.id), r.removePrefix("./"))
-                            }.filter { it.exists() }
-                            viewerIndex = refs.indexOf(dest).coerceAtLeast(0)
+                            // dest 为渲染端回传的绝对路径（已剥离尺寸令牌），按绝对路径匹配定位
+                            val files = CardTextUtils.imageTargets(content)
+                                .map {
+                                    File(
+                                        viewModel.baseDirFor(card.id),
+                                        CardTextUtils.splitImageSize(it).first.removePrefix("./")
+                                    )
+                                }
+                                .filter { it.exists() }
                             viewerImages = files
+                            viewerIndex = files.indexOfFirst { it.absolutePath == dest }
+                                .coerceAtLeast(0)
                         }
                     )
                 }

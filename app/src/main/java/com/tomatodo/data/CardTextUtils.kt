@@ -14,6 +14,35 @@ object CardTextUtils {
     const val TITLE_MAX_LEN = 50
     const val EXCERPT_MAX_LEN = 90
 
+    // ---- 图片尺寸令牌（v1.4）：`![](assets/x.jpg#50)` = 50% 画布宽，等比高 ----
+
+    /** 工具栏预设宽度百分比（25/50/75/100，100 = 满宽） */
+    val SIZE_PRESETS: List<Int> = listOf(25, 50, 75, 100)
+
+    private val WIDTH_TOKEN = Regex("^w=(\\d{1,3})$")
+
+    /** 目标引用 → (干净路径, 宽度百分比)。仅 `#w=1..100` 识别为尺寸令牌，其余视为路径 */
+    fun splitImageSize(target: String): Pair<String, Int?> {
+        val idx = target.lastIndexOf('#')
+        if (idx < 0) return target to null
+        val pct = WIDTH_TOKEN.matchEntire(target.substring(idx + 1))
+            ?.groupValues?.get(1)?.toIntOrNull()
+            ?.takeIf { it in 1..100 }
+            ?: return target to null
+        return target.substring(0, idx) to pct
+    }
+
+    /** 写入/替换/移除尺寸令牌；percent 为 null 或 100 时恢复无令牌满宽 */
+    fun withImageSize(target: String, percent: Int?): String {
+        val (path, _) = splitImageSize(target)
+        val pct = percent?.takeIf { it in 1..99 } ?: return path
+        return "$path#w=$pct"
+    }
+
+    /** 按文档顺序抽取全部图片引用目标（含尺寸令牌，由调用方按需剥离） */
+    fun imageTargets(md: String): List<String> =
+        Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").findAll(md).map { it.groupValues[1] }.toList()
+
     /** 新建模板（408 场景）：错题模板演示 `---` 问/答面约定 */
     val TEMPLATES: List<Pair<String, String>> = listOf(
         "空白" to "",
@@ -110,8 +139,10 @@ object CardTextUtils {
         var s = line
         if (baseDir != null) {
             s = s.replace(Regex("""(!\[[^\]]*\]\()(?!https?://|file:|content:)([^)]+)(\))""")) { m ->
-                val path = m.groupValues[2].trim()
-                m.groupValues[1] + File(baseDir, path).absolutePath + m.groupValues[3]
+                // 尺寸令牌（#w=NN）须剥离后再解析绝对路径，拼回交给渲染端
+                val (path, pct) = splitImageSize(m.groupValues[2].trim())
+                val token = pct?.let { "#w=$it" }.orEmpty()
+                m.groupValues[1] + File(baseDir, path).absolutePath + token + m.groupValues[3]
             }
         }
         s = s.replace(Regex("(?<!\\\\)(?<!\\$)\\$(?!\\$)((?:[^$\\n\\\\]|\\\\.)+?)(?<!\\\\)\\$(?!\\$)")) { m ->

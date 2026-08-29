@@ -19,6 +19,7 @@ import io.noties.markwon.image.AsyncDrawableLoader
 import io.noties.markwon.image.AsyncDrawableScheduler
 import io.noties.markwon.image.DrawableUtils
 import io.noties.markwon.image.ImageProps
+import io.noties.markwon.image.ImageSize
 import io.noties.markwon.image.ImageSpanFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,9 +45,18 @@ class KmsImagePlugin(
 
     override fun configureSpansFactory(builder: MarkwonSpansFactory.Builder) {
         builder.setFactory(Image::class.java) { configuration, props ->
-            val destination = props.get(ImageProps.DESTINATION)
+            val rawDestination = props.get(ImageProps.DESTINATION)
+            // v1.4 尺寸令牌：`#w=NN` → 注入 IMAGE_SIZE，交给内置 ImageSizeResolverDef 按画布宽等比缩放
+            val (destination, widthPct) = CardTextUtils.splitImageSize(rawDestination.orEmpty())
+            if (destination != rawDestination) props.set(ImageProps.DESTINATION, destination)
+            if (widthPct != null) {
+                props.set(
+                    ImageProps.IMAGE_SIZE,
+                    ImageSize(ImageSize.Dimension(widthPct.toFloat(), "%"), null)
+                )
+            }
             val span: Any? = ImageSpanFactory().getSpans(configuration, props)
-            if (destination != null && onImageClick != null) {
+            if (rawDestination != null && onImageClick != null) {
                 val click = object : ClickableSpan() {
                     override fun onClick(widget: View) {
                         onImageClick?.invoke(destination)

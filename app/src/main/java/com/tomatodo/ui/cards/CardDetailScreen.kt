@@ -49,6 +49,7 @@ import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoSizeSelectLarge
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Visibility
@@ -138,6 +139,7 @@ fun CardDetailScreen(
     var showPreview by remember { mutableStateOf(false) }
     var formulaMenu by remember { mutableStateOf(false) }
     var templateMenu by remember { mutableStateOf(false) }
+    var imageSizeMenu by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     var viewerImages by remember { mutableStateOf(listOf<File>()) }
     var viewerIndex by remember { mutableIntStateOf(0) }
@@ -270,11 +272,12 @@ fun CardDetailScreen(
                 onTrash = { confirmTrash = true },
                 onImageClick = { dest ->
                     val id = currentCardId ?: return@ReadView
-                    val refs = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
-                        .findAll(content.text).map { it.groupValues[1] }.toList()
-                    val files = refs.map { viewModel.assetFile(id, it) }.filter { it.exists() }
-                    viewerIndex = refs.indexOf(dest).coerceAtLeast(0)
+                    // dest 为渲染端回传的绝对路径（已剥离尺寸令牌），按绝对路径匹配定位
+                    val files = CardTextUtils.imageTargets(content.text)
+                        .map { viewModel.assetFile(id, CardTextUtils.splitImageSize(it).first) }
+                        .filter { it.exists() }
                     viewerImages = files
+                    viewerIndex = files.indexOfFirst { it.absolutePath == dest }.coerceAtLeast(0)
                 }
             )
 
@@ -320,7 +323,22 @@ fun CardDetailScreen(
                 onInsertTemplate = { template -> content = TextFieldValue(template) },
                 onInsertToolbar = { text, cursorBack -> insertAtCursor({ content = it }, content, text, cursorBack) },
                 onLineStartInsert = { prefix -> insertAtLineStart({ content = it }, content, prefix) },
-                onWrapSelection = { wrap -> wrapSelection({ content = it }, content, wrap) }
+                onWrapSelection = { wrap -> wrapSelection({ content = it }, content, wrap) },
+                imageSizeMenu = imageSizeMenu,
+                onImageSizeMenu = { imageSizeMenu = true },
+                onImageSizeDismiss = { imageSizeMenu = false },
+                onApplyImageSize = { pct ->
+                    val updated = applyImageSizeAtCursor(content, pct)
+                    when {
+                        updated == null -> scope.launch {
+                            snackbar.showSnackbar("请把光标放到要调整的图片所在行")
+                        }
+                        updated.text == content.text -> scope.launch {
+                            snackbar.showSnackbar("光标处图片已是该尺寸")
+                        }
+                        else -> content = updated
+                    }
+                }
             )
         }
         SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
@@ -503,7 +521,11 @@ private fun EditView(
     onInsertTemplate: (String) -> Unit,
     onInsertToolbar: (String, Int) -> Unit,
     onLineStartInsert: (String) -> Unit,
-    onWrapSelection: (Pair<String, String>) -> Unit
+    onWrapSelection: (Pair<String, String>) -> Unit,
+    imageSizeMenu: Boolean,
+    onImageSizeMenu: () -> Unit,
+    onImageSizeDismiss: () -> Unit,
+    onApplyImageSize: (Int) -> Unit
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 700.dp
@@ -606,6 +628,28 @@ private fun EditView(
                     }
                     ToolIcon(Icons.Outlined.PhotoCamera, "拍照") { onCamera() }
                     ToolIcon(Icons.Outlined.Image, "相册") { onGallery() }
+                    Box {
+                        ToolIcon(Icons.Outlined.PhotoSizeSelectLarge, "图片尺寸") { onImageSizeMenu() }
+                        DropdownMenu(expanded = imageSizeMenu, onDismissRequest = onImageSizeDismiss) {
+                            CardTextUtils.SIZE_PRESETS.forEach { pct ->
+                                DropdownMenuItem(
+                                    text = { Text(if (pct == 100) "满宽" else "$pct%") },
+                                    trailingIcon = {
+                                        Text(
+                                            if (pct == 100) "无令牌" else "#w=$pct",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    onClick = {
+                                        onImageSizeDismiss()
+                                        onApplyImageSize(pct)
+                                    }
+                                )
+                            }
+                        }
+                    }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
@@ -914,4 +958,26 @@ private fun wrapSelection(
             current.text.substring(sel.max)
         setter(TextFieldValue(newText, TextRange(sel.max + wrap.first.length + wrap.second.length)))
     }
+}
+
+/**
+ * 对光标处图片应用宽度百分比：优先取范围包含光标、其次光标所在行的图片引用；
+ * 光标处无图片返回 null（由调用方提示），命中返回改写后的新值。
+ */
+private fun applyImageSizeAtCursor(current: TextFieldValue, percent: Int): TextFieldValue? {
+    val pos = current.selection.min
+    val text = current.text
+    val matches = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").findAll(text).toList()
+    if (matches.isEmpty()) return null
+    val lineStart = text.lastIndexOf('\n', (pos - 1).coerceAtLeast(0)).let {
+        if (pos == 0) 0 else it + 1
+    }
+    val lineEnd = text.indexOf('\n', pos).let { if (it < 0) text.length else it }
+    val target = matches.firstOrNull { pos in it.range.first..it.range.last }
+        ?: matches.firstOrNull { it.range.first >= lineStart && it.range.last <= lineEnd }
+        ?: return null
+    val destRange = target.groups[1]?.range ?: return null
+    val newDest = CardTextUtils.withImageSize(target.groupValues[1], percent)
+    val newText = text.substring(0, destRange.first) + newDest + text.substring(destRange.last + 1)
+    return TextFieldValue(newText, TextRange(destRange.first + newDest.length))
 }
