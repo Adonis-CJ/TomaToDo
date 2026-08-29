@@ -2,8 +2,16 @@
 
 package com.tomatodo.ui.cards
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +30,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +41,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -48,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -66,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -74,6 +85,7 @@ import com.tomatodo.data.model.CardType
 import com.tomatodo.data.model.KnowledgeCard
 import com.tomatodo.data.model.Subject
 import com.tomatodo.ui.theme.AppSerif
+import com.tomatodo.ui.theme.Motion
 import kotlinx.coroutines.launch
 
 /**
@@ -141,14 +153,17 @@ fun CardsScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Button(onClick = { onEditCard(null) }) {
+                Button(
+                    onClick = { onEditCard(null) },
+                    shape = MaterialTheme.shapes.small
+                ) {
                     Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("新建")
                 }
             }
 
-            // 搜索框
+            // 搜索框（软底纸面样式：无外框、surface 微底、聚焦时发丝描边）
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = viewModel::search,
@@ -165,7 +180,14 @@ fun CardsScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.large,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent
+                )
             )
             Spacer(Modifier.height(12.dp))
 
@@ -222,15 +244,17 @@ fun CardsScreen(
             // 卡片主体
             if (visibleCards.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        when {
+                    EmptyState(
+                        title = when {
                             searching -> "未找到匹配的卡片"
-                            cards.isEmpty() -> "还没有卡片\n点右上角「新建」记录第一个知识点"
+                            cards.isEmpty() -> "还没有卡片"
                             else -> "当前筛选下没有卡片"
                         },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(24.dp)
+                        hint = when {
+                            searching -> "换个关键词试试"
+                            cards.isEmpty() -> "点右上角「新建」记录第一个知识点"
+                            else -> "调整筛选条件即可看到更多"
+                        }
                     )
                 }
             } else if (viewMode == CardsViewMode.GRID) {
@@ -241,20 +265,23 @@ fun CardsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(visibleCards, key = { it.id }) { card ->
-                        SummaryCardItem(
-                            card = card,
-                            subject = subjectById[card.subjectId],
-                            tagNames = tagsByCard[card.id].orEmpty().mapNotNull { tagNameById[it] },
-                            onClick = { onOpenCard(card.id) },
-                            onTrash = {
-                                viewModel.moveToTrash(card)
-                                scope.launch {
-                                    val r = snackbar.showSnackbar("已移入回收站", actionLabel = "撤销")
-                                    if (r == SnackbarResult.ActionPerformed) viewModel.undoTrash()
+                    itemsIndexed(visibleCards, key = { _, card -> card.id }) { index, card ->
+                        StaggerIn(index = index) {
+                            SummaryCardItem(
+                                modifier = Modifier.animateItem(),
+                                card = card,
+                                subject = subjectById[card.subjectId],
+                                tagNames = tagsByCard[card.id].orEmpty().mapNotNull { tagNameById[it] },
+                                onClick = { onOpenCard(card.id) },
+                                onTrash = {
+                                    viewModel.moveToTrash(card)
+                                    scope.launch {
+                                        val r = snackbar.showSnackbar("已移入回收站", actionLabel = "撤销")
+                                        if (r == SnackbarResult.ActionPerformed) viewModel.undoTrash()
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             } else {
@@ -277,20 +304,23 @@ fun CardsScreen(
                             key = "header_${subject?.id ?: -1L}",
                             span = { GridItemSpan(maxLineSpan) }
                         ) { GroupHeader(subject, groupCards.size) }
-                        items(groupCards, key = { it.id }) { card ->
-                            SummaryCardItem(
-                                card = card,
-                                subject = subjectById[card.subjectId],
-                                tagNames = tagsByCard[card.id].orEmpty().mapNotNull { tagNameById[it] },
-                                onClick = { onOpenCard(card.id) },
-                                onTrash = {
-                                    viewModel.moveToTrash(card)
-                                    scope.launch {
-                                        val r = snackbar.showSnackbar("已移入回收站", actionLabel = "撤销")
-                                        if (r == SnackbarResult.ActionPerformed) viewModel.undoTrash()
+                        itemsIndexed(groupCards, key = { _, card -> card.id }) { index, card ->
+                            StaggerIn(index = index) {
+                                SummaryCardItem(
+                                    modifier = Modifier.animateItem(),
+                                    card = card,
+                                    subject = subjectById[card.subjectId],
+                                    tagNames = tagsByCard[card.id].orEmpty().mapNotNull { tagNameById[it] },
+                                    onClick = { onOpenCard(card.id) },
+                                    onTrash = {
+                                        viewModel.moveToTrash(card)
+                                        scope.launch {
+                                            val r = snackbar.showSnackbar("已移入回收站", actionLabel = "撤销")
+                                            if (r == SnackbarResult.ActionPerformed) viewModel.undoTrash()
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -424,20 +454,35 @@ private fun GroupHeader(subject: Subject?, count: Int) {
     }
 }
 
-/** 摘要卡：科目色点 + 类型 · 标题 · 两行摘要 · 标签 · 复习徽标 */
+/** 摘要卡：纸卡 + 发丝描边 + 低海拔阴影 + 按压回弹；科目色点 + 类型 · 标题 · 两行摘要 · 标签 · 复习徽标 */
 @Composable
 private fun SummaryCardItem(
     card: KnowledgeCard,
     subject: Subject?,
     tagNames: List<String>,
     onClick: () -> Unit,
-    onTrash: () -> Unit
+    onTrash: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val due = card.nextReviewAt <= System.currentTimeMillis()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = Motion.press(),
+        label = "summaryCardPress"
+    )
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        interactionSource = interaction
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -467,15 +512,22 @@ private fun SummaryCardItem(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.width(8.dp))
-                Icon(
-                    Icons.Outlined.Delete,
-                    contentDescription = "移入回收站",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clickable(onClick = onTrash)
-                )
+                // 删除：可视 16dp 图标 + 28dp 圆形触控区（原裸 clickable 触控过小）
+                Box(
+                    Modifier
+                        .padding(start = 4.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onTrash),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "移入回收站",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
             Text(
@@ -507,15 +559,69 @@ private fun SummaryCardItem(
                     shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
                 ) {
-                    Text(
-                        "待复习",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "待复习",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/** 空状态：图标 + 主文案 + 辅助文案 */
+@Composable
+private fun EmptyState(title: String, hint: String?) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(24.dp)
+    ) {
+        Icon(
+            Icons.Outlined.Style,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(44.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (hint != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+/** 列表入场：fade + 自下浮入，index 阶梯延迟（封顶防长尾） */
+@Composable
+private fun StaggerIn(index: Int, content: @Composable () -> Unit) {
+    val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = fadeIn(Motion.enter(Motion.DURATION_MEDIUM, Motion.staggerDelay(index))) +
+            slideInVertically(Motion.enter(Motion.DURATION_MEDIUM, Motion.staggerDelay(index))) { it / 6 }
+    ) {
+        content()
     }
 }
 

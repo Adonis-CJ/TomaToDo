@@ -1,11 +1,14 @@
 package com.tomatodo.ui.review
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +56,7 @@ import com.tomatodo.data.model.Subject
 import com.tomatodo.ui.cards.ImageViewerDialog
 import com.tomatodo.ui.cards.render.MarkdownText
 import com.tomatodo.ui.theme.AppSerif
+import com.tomatodo.ui.theme.Motion
 import java.io.File
 
 /**
@@ -160,11 +164,12 @@ fun ReviewScreen(viewModel: ReviewViewModel = viewModel()) {
 
                 Spacer(Modifier.height(16.dp))
 
-                // 单卡沉浸（A4 式过渡）
+                // 单卡沉浸（fade + 自下浮入）
                 AnimatedContent(
                     targetState = current,
                     transitionSpec = {
-                        (fadeIn() + slideInHorizontally { it / 16 }) togetherWith fadeOut()
+                        (fadeIn(Motion.enter()) + slideInVertically(Motion.enter()) { it / 24 }) togetherWith
+                            fadeOut(Motion.exit())
                     },
                     label = "reviewCard",
                     modifier = Modifier
@@ -227,7 +232,9 @@ private fun ReviewCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        shadowElevation = 1.dp
     ) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -267,50 +274,78 @@ private fun ReviewCard(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (revealed) {
-                    Spacer(Modifier.height(20.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(
-                                "答案",
-                                style = MaterialTheme.typography.labelLarge.copy(fontFamily = AppSerif),
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            MarkdownText(
-                                markdown = answer,
-                                baseDir = baseDir,
-                                onImageClick = onImageClick,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                // 答面揭示：自下滑入（翻开隐喻）
+                AnimatedVisibility(
+                    visible = revealed,
+                    enter = fadeIn(Motion.enter()) + slideInVertically(Motion.enter()) { it / 6 },
+                    exit = fadeOut(Motion.exit())
+                ) {
+                    Column {
+                        Spacer(Modifier.height(20.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "答案",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontFamily = AppSerif),
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                MarkdownText(
+                                    markdown = answer,
+                                    baseDir = baseDir,
+                                    onImageClick = onImageClick,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                 }
             }
 
             Spacer(Modifier.height(24.dp))
-            if (revealed) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { onResult(ReviewResult.FORGET) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) { Text("忘记") }
-                    FilledTonalButton(onClick = { onResult(ReviewResult.VAGUE) }) { Text("模糊") }
-                    Button(
-                        onClick = { onResult(ReviewResult.REMEMBER) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) { Text("记得") }
+            AnimatedContent(
+                targetState = revealed,
+                transitionSpec = { fadeIn(Motion.enter()) togetherWith fadeOut(Motion.exit()) },
+                label = "reviewActions"
+            ) { revealedState ->
+                if (revealedState) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = { onResult(ReviewResult.FORGET) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("忘记") }
+                        FilledTonalButton(
+                            onClick = { onResult(ReviewResult.VAGUE) },
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("模糊") }
+                        Button(
+                            onClick = { onResult(ReviewResult.REMEMBER) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary
+                            ),
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("记得") }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onReveal,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("查看答案") }
                 }
-            } else {
-                OutlinedButton(onClick = onReveal) { Text("查看答案") }
             }
         }
     }

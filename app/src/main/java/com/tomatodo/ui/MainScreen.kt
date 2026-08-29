@@ -3,6 +3,9 @@ package com.tomatodo.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,7 @@ import com.tomatodo.ui.cards.TrashScreen
 import com.tomatodo.ui.review.ReviewScreen
 import com.tomatodo.ui.settings.SettingsScreen
 import com.tomatodo.ui.stats.StatsScreen
+import com.tomatodo.ui.theme.Motion
 import com.tomatodo.timer.TimerScreen
 
 /** 主导航目的地（图标为 Material Symbols 线性 SVG，非 emoji） */
@@ -103,7 +107,20 @@ fun MainScreen() {
 
     AnimatedContent(
         targetState = Triple(viewerOpen, trashOpen, timerImmersive),
-        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        transitionSpec = {
+            // 覆盖层（卡片详情/回收站）方向性转场：自右滑入，退出反向；其余（沉浸切换）淡入淡出
+            val enteringOverlay = targetState.first || targetState.second
+            val leavingOverlay = initialState.first || initialState.second
+            when {
+                enteringOverlay && !leavingOverlay ->
+                    (fadeIn(Motion.enter()) + slideInHorizontally(Motion.enter()) { it / 16 }) togetherWith
+                        fadeOut(Motion.exit())
+                !enteringOverlay && leavingOverlay ->
+                    fadeIn(Motion.enter()) togetherWith
+                        (fadeOut(Motion.exit()) + slideOutHorizontally(Motion.exit()) { it / 16 })
+                else -> fadeIn(Motion.standard()) togetherWith fadeOut(Motion.exit())
+            }
+        },
         label = "overlay",
         modifier = Modifier
             .fillMaxSize()
@@ -136,32 +153,42 @@ fun MainScreen() {
                     }
                 }
                 if (!immersive) VerticalDivider()
-                // 内容区
-                when (selected) {
-                    Destination.Board -> BoardScreen(
-                        onStartPomodoro = { task ->
-                            timerViewModel.startForTask(task.id)
-                            selected = Destination.Timer
-                        }
-                    )
-                    Destination.Timer -> TimerScreen(
-                        onImmersiveChanged = { timerImmersive = it },
-                        viewModel = timerViewModel
-                    )
-                    Destination.Review -> ReviewScreen()
-                    Destination.Cards -> CardsScreen(
-                        onEditCard = { id ->
-                            viewerCardId = id
-                            viewerOpen = true
-                        },
-                        onOpenCard = { id ->
-                            viewerCardId = id
-                            viewerOpen = true
-                        },
-                        onOpenTrash = { trashOpen = true }
-                    )
-                    Destination.Stats -> StatsScreen()
-                    Destination.Settings -> SettingsScreen()
+                // 内容区（目的地切换转场：fade + 自下浮入）
+                AnimatedContent(
+                    targetState = selected,
+                    transitionSpec = {
+                        (fadeIn(Motion.enter()) + slideInVertically(Motion.enter()) { it / 24 }) togetherWith
+                            fadeOut(Motion.exit())
+                    },
+                    label = "destination",
+                    modifier = Modifier.weight(1f)
+                ) { dest ->
+                    when (dest) {
+                        Destination.Board -> BoardScreen(
+                            onStartPomodoro = { task ->
+                                timerViewModel.startForTask(task.id)
+                                selected = Destination.Timer
+                            }
+                        )
+                        Destination.Timer -> TimerScreen(
+                            onImmersiveChanged = { timerImmersive = it },
+                            viewModel = timerViewModel
+                        )
+                        Destination.Review -> ReviewScreen()
+                        Destination.Cards -> CardsScreen(
+                            onEditCard = { id ->
+                                viewerCardId = id
+                                viewerOpen = true
+                            },
+                            onOpenCard = { id ->
+                                viewerCardId = id
+                                viewerOpen = true
+                            },
+                            onOpenTrash = { trashOpen = true }
+                        )
+                        Destination.Stats -> StatsScreen()
+                        Destination.Settings -> SettingsScreen()
+                    }
                 }
             }
         }
