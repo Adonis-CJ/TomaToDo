@@ -14,6 +14,11 @@
 > - 查看器索引既有偏差已修：`CardDetailScreen`/`ReviewScreen` 改为按绝对路径匹配（原相对引用 `indexOf` 恒 -1，多图集恒开第一张）。
 > - 沉浸态翻页时钟重构为双叶片分瓣翻转（`timer/FlipClock.kt` + `Motion` 翻页令牌），并按 `:` 分段渲染修复 `H:MM:SS` 冒号错位。方案与状态见 [UPGRADE_v1.4_IMAGE_SIZE_FLIPCLOCK.md](UPGRADE_v1.4_IMAGE_SIZE_FLIPCLOCK.md)。
 
+> **⚠ v1.5 进展更新（2026-08-29）**
+> - 全局全屏已实现：`MainActivity` 在 onCreate/onResume 隐藏状态栏 + 导航栏（`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` 边缘轻扫临时唤出），修复「通知栏条常驻界面上侧」。
+> - 沉浸态结构性修复：沉浸标志原经回调抬升外壳 → `AnimatedContent` 重建丢态 → 震荡 + 系统栏竞态（沉浸未覆盖全屏的根因）。现以 `TimerViewModel.isImmersive` 流为单一事实源，外壳与计时页各自收集；`reset()` 同步退出沉浸。
+> - 计时防睡眠补齐（此前**完全未实现**）：运行中 `FLAG_KEEP_SCREEN_ON` 保持亮屏（`repeatOnLifecycle(STARTED)` 跟随运行态），暂停/结束归还；计时精度沿用 wall-clock `endAt` 基准不受息屏影响。方案与状态见 [UPGRADE_v1.5_FULLSCREEN_IMMERSION.md](UPGRADE_v1.5_FULLSCREEN_IMMERSION.md)。
+
 ## 1. 项目与基线
 
 - 项目：TomaTodo —— 考研人 Android 平板效率应用（Kotlin 2.2 + Compose M3，AGP 9 / Gradle 9.1 / KSP，minSdk 26 / targetSdk 36，Room 2.8.4 + DataStore + Coil 2.7，手动 DI `AppContainer`）。
