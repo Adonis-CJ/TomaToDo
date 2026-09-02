@@ -1,6 +1,6 @@
 # TomaTodo 开发规范（Development Guidelines）
 
-> 版本：v1.0（2026-08-29）· 适用：本项目所有人工/Agent 开发会话
+> 版本：v1.1（2026-09-03）· 适用：本项目所有人工/Agent 开发会话
 > 精简版位于仓库根目录 [AGENTS.md](../AGENTS.md)；冲突时以本文档为准。
 > 项目背景见 [PRD.md](../PRD.md)；每次升级的方案与偏差记录见 `docs/UPGRADE_*.md`。
 
@@ -42,6 +42,42 @@
 - 禁止改写已推送历史（amend/rebase published、force push main）。
 - 提交前 `git status` 自查，不提交 `local.properties`、密钥、临时调试产物。
 - push 需用户明确指示（Agent 会话默认只 commit 不 push）。
+
+### 1.4 版本与发布
+
+#### 版本号（SemVer）
+
+- 格式：`MAJOR.MINOR.PATCH`（如 `1.6.0`）。
+- MINOR：功能迭代（每个 `UPGRADE_v*.md` 对应一次 MINOR 提升）。
+- PATCH：纯修复，无新功能。
+- `versionCode` 单调递增，与 `versionName` 同步更新于 `app/build.gradle.kts`。
+
+#### 发布流程
+
+1. **版本号提升**：修改 `versionCode` / `versionName`，单独 commit（`chore(release): vX.Y.Z 版本号提升`）。
+2. **构建签名 APK**：`./gradlew :app:assembleRelease`，产物位于 `app/build/outputs/apk/release/app-release.apk`。
+3. **打 annotated tag**：`git tag -a vX.Y.Z -m "vX.Y.Z — 一句话摘要"`。
+4. **推送**：`git push && git push origin vX.Y.Z`（需用户指示）。
+5. **创建 GitHub Release**：`gh release create vX.Y.Z <apk路径> --title "..." --notes "..."`，附带签名 APK。
+6. **回填文档**：更新 `docs/UPGRADE_v*.md` 状态为「已发布」。
+
+#### Release Notes 格式
+
+```markdown
+## 变更内容
+
+- **type(scope)**: 一句话描述
+
+## 安装
+
+下载 `app-release.apk` 直接安装（已签名）。
+```
+
+#### 签名
+
+- Keystore：`app/tomatodo-release.jks`（已加入 .gitignore，不入库）。
+- 签名配置写在 `app/build.gradle.kts` 的 `signingConfigs.release`。
+- 若 keystore 丢失需重新生成，旧版本用户需卸载重装（签名不兼容）。
 
 ---
 
