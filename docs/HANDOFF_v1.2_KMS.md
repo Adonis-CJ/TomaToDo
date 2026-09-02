@@ -19,6 +19,12 @@
 > - 沉浸态结构性修复：沉浸标志原经回调抬升外壳 → `AnimatedContent` 重建丢态 → 震荡 + 系统栏竞态（沉浸未覆盖全屏的根因）。现以 `TimerViewModel.isImmersive` 流为单一事实源，外壳与计时页各自收集；`reset()` 同步退出沉浸。
 > - 计时防睡眠补齐（此前**完全未实现**）：运行中 `FLAG_KEEP_SCREEN_ON` 保持亮屏（`repeatOnLifecycle(STARTED)` 跟随运行态），暂停/结束归还；计时精度沿用 wall-clock `endAt` 基准不受息屏影响。方案与状态见 [UPGRADE_v1.5_FULLSCREEN_IMMERSION.md](UPGRADE_v1.5_FULLSCREEN_IMMERSION.md)。
 
+> **⚠ v1.6 进展更新（2026-08-29）**
+> - **LaTeX 行内渲染根因（字节码取证）**：`JLatexMathPlugin$Builder` 默认 `inlinesEnabled=false`，`buildMarkwon` 从未开启 → 行内 `$$…$$` 以源码呈现；且开启后插件会 `registry.require(MarkwonInlineParserPlugin)`，缺失即抛 `IllegalStateException`。修复：`MarkdownText` 于 `CorePlugin` 后注册 `MarkwonInlineParserPlugin.create()` 并在 latex lambda 调 `b.inlinesEnabled(true)`。附带把 `markwon` 的 remember key 去掉不稳定的 `onImageClick`（改 `rememberUpdatedState`+稳定闭包），消除阅读视角重解析闪烁。新增 4 条 LaTeX 转义单测。
+> - **移除知识系统模板**：删 `CardTextUtils.TEMPLATES` 与 `CardDetailScreen` 全部模板 UI（新建弹窗/工具栏下拉/参数）；保留 `FORMULA_SNIPPETS`；新建卡片直接空白书写。
+> - **结束提醒 z 序修复**：`MainScreen` 原把 `PhaseCompletionOverlay` 发在 `AnimatedContent` 之前且无 Box 包裹 → 提醒渲染在主内容之下、半透明合成造成「重叠」。现纳入同一 `Box` 并置顶，提醒改 `AnimatedVisibility` 淡入淡出（退出期用 `lastInfo` 保内容）。
+> - **翻页钟改淡变**：`FlipCard` 由分瓣翻转重写为两段式淡出→（透明换值）→淡入，单值可见杜绝重影；移除 `HalfDigit`/`FlapHalf`/中缝/透视，保留公开签名与卡片排版；`Motion` 删 flip* 令牌、增 `flipFadeOut/In`+`DURATION_FLIP_FADE`。方案与状态见 [UPGRADE_v1.6_LATEX_TEMPLATE_ANIMATION.md](UPGRADE_v1.6_LATEX_TEMPLATE_ANIMATION.md)。本轮**未推送**（用户未要求，且指示暂不上机验证）。
+
 ## 1. 项目与基线
 
 - 项目：TomaTodo —— 考研人 Android 平板效率应用（Kotlin 2.2 + Compose M3，AGP 9 / Gradle 9.1 / KSP，minSdk 26 / targetSdk 36，Room 2.8.4 + DataStore + Coil 2.7，手动 DI `AppContainer`）。
