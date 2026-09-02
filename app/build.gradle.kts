@@ -12,13 +12,23 @@ android {
         applicationId = "com.tomatodo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "1.6.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("tomatodo-release.jks")
+            storePassword = "tomatodo2026"
+            keyAlias = "tomatodo"
+            keyPassword = "tomatodo2026"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

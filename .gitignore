@@ -27,3 +27,7 @@ screenshot_*.png
 
 # AI generated image samples
 vibe_images/
+
+# Release keystore
+*.jks
+*.keystore
