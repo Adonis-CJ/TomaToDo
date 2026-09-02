@@ -1,11 +1,14 @@
 package com.tomatodo.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,6 +51,7 @@ import com.tomatodo.timer.AlarmNotifications
 import com.tomatodo.timer.TimerController
 import com.tomatodo.timer.TimerViewModel
 import com.tomatodo.ui.theme.AppSerif
+import com.tomatodo.ui.theme.Motion
 import kotlinx.coroutines.delay
 
 private data class CompletionInfo(val completedPhase: PomodoroType, val completedMinutes: Long)
@@ -87,79 +91,89 @@ fun PhaseCompletionOverlay(
         }
     }
 
-    val info = completion
-    if (info != null) {
-        val state = timerViewModel.state.collectAsState().value
-        val focusDone = info.completedPhase == PomodoroType.FOCUS
-        val nextMinutes = state.totalMillis / 60_000L
+    val state by timerViewModel.state.collectAsState()
+    // 退出淡出期间仍需内容渲染：保留最后一次非空信息（赋值放 LaunchedEffect，组合期不做副作用）
+    var lastInfo by remember { mutableStateOf<CompletionInfo?>(null) }
+    LaunchedEffect(completion) { if (completion != null) lastInfo = completion }
 
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { completion = null }
-        ) {
-            Column(
-                Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
+    AnimatedVisibility(
+        visible = completion != null,
+        enter = fadeIn(Motion.enter()),
+        exit = fadeOut(Motion.exit())
+    ) {
+        val info = completion ?: lastInfo
+        if (info != null) {
+            val focusDone = info.completedPhase == PomodoroType.FOCUS
+            val nextMinutes = state.totalMillis / 60_000L
+
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { completion = null }
             ) {
-                // 脉冲圆环
-                Box(contentAlignment = Alignment.Center) {
-                    PulseRings(color = MaterialTheme.colorScheme.primary)
-                    Box(
-                        Modifier
-                            .size(112.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                        contentAlignment = Alignment.Center
+                Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 脉冲圆环
+                    Box(contentAlignment = Alignment.Center) {
+                        PulseRings(color = MaterialTheme.colorScheme.primary)
+                        Box(
+                            Modifier
+                                .size(112.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Outlined.Timer,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(56.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(28.dp))
+                    Text(
+                        if (focusDone) "专注完成！" else "休息完成！",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = AppSerif,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (focusDone) {
+                            "已完成 ${state.completedPomodoros} 个番茄 · 休息 $nextMinutes 分钟"
+                        } else {
+                            "休息了 ${info.completedMinutes} 分钟 · 开始下一个专注吧"
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(32.dp))
+                    Button(
+                        onClick = {
+                            timerViewModel.start()
+                            completion = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier.height(52.dp)
                     ) {
-                        Icon(
-                            Icons.Outlined.Timer,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(56.dp)
+                        Text(
+                            if (focusDone) "开始休息" else "开始专注",
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
-                }
-                Spacer(Modifier.height(28.dp))
-                Text(
-                    if (focusDone) "专注完成！" else "休息完成！",
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = AppSerif,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    if (focusDone) {
-                        "已完成 ${state.completedPomodoros} 个番茄 · 休息 $nextMinutes 分钟"
-                    } else {
-                        "休息了 ${info.completedMinutes} 分钟 · 开始下一个专注吧"
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(32.dp))
-                Button(
-                    onClick = {
-                        timerViewModel.start()
-                        completion = null
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier.height(52.dp)
-                ) {
-                    Text(
-                        if (focusDone) "开始休息" else "开始专注",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { completion = null }) {
-                    Text("稍后再说", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { completion = null }) {
+                        Text("稍后再说", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

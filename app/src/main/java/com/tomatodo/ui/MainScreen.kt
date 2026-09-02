@@ -100,97 +100,101 @@ fun MainScreen() {
     // 沉浸态单一事实源（v1.5 §2）：导航栏渲染跟随此流，替代回调往返
     val timerImmersive by timerViewModel.isImmersive.collectAsState()
 
-    // 番茄钟阶段完成全屏提醒（KMS v1.2 同期改进：结束更醒目）
-    PhaseCompletionOverlay(
-        timerViewModel = timerViewModel,
-        visible = !viewerOpen && !trashOpen
-    )
-
-    AnimatedContent(
-        targetState = Triple(viewerOpen, trashOpen, timerImmersive),
-        transitionSpec = {
-            // 覆盖层（卡片详情/回收站）方向性转场：自右滑入，退出反向；其余（沉浸切换）淡入淡出
-            val enteringOverlay = targetState.first || targetState.second
-            val leavingOverlay = initialState.first || initialState.second
+    // z 序修复（v1.6 §3）：主内容与结束提醒必须叠放在同一 Box 内，且提醒放在最后（最上层）。
+    // 此前提醒先于 AnimatedContent 发出 → 渲染在主内容之下，两者半透明合成造成「结束提示与计时界面重叠」。
+    Box(Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = Triple(viewerOpen, trashOpen, timerImmersive),
+            transitionSpec = {
+                // 覆盖层（卡片详情/回收站）方向性转场：自右滑入，退出反向；其余（沉浸切换）淡入淡出
+                val enteringOverlay = targetState.first || targetState.second
+                val leavingOverlay = initialState.first || initialState.second
+                when {
+                    enteringOverlay && !leavingOverlay ->
+                        (fadeIn(Motion.enter()) + slideInHorizontally(Motion.enter()) { it / 16 }) togetherWith
+                            fadeOut(Motion.exit())
+                    !enteringOverlay && leavingOverlay ->
+                        fadeIn(Motion.enter()) togetherWith
+                            (fadeOut(Motion.exit()) + slideOutHorizontally(Motion.exit()) { it / 16 })
+                    else -> fadeIn(Motion.standard()) togetherWith fadeOut(Motion.exit())
+                }
+            },
+            label = "overlay",
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+        ) { (inViewer, inTrash, immersive) ->
             when {
-                enteringOverlay && !leavingOverlay ->
-                    (fadeIn(Motion.enter()) + slideInHorizontally(Motion.enter()) { it / 16 }) togetherWith
-                        fadeOut(Motion.exit())
-                !enteringOverlay && leavingOverlay ->
-                    fadeIn(Motion.enter()) togetherWith
-                        (fadeOut(Motion.exit()) + slideOutHorizontally(Motion.exit()) { it / 16 })
-                else -> fadeIn(Motion.standard()) togetherWith fadeOut(Motion.exit())
-            }
-        },
-        label = "overlay",
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-    ) { (inViewer, inTrash, immersive) ->
-        when {
-            inViewer -> CardDetailScreen(
-                cardId = viewerCardId,
-                onBack = { viewerOpen = false }
-            )
-            inTrash -> TrashScreen(onBack = { trashOpen = false })
-            else -> Row(Modifier.fillMaxSize()) {
-                // 沉浸式时隐藏导航栏，实现真·全屏（不重建计时页状态）
-                androidx.compose.animation.AnimatedVisibility(visible = !immersive) {
-                    Column {
-                        NavigationRail {
-                            // 顶部：考研倒计时
-                            CountdownHeader()
-                            Spacer(Modifier.weight(1f))
-                            Destination.entries.forEach { dest ->
-                                NavigationRailItem(
-                                    selected = selected == dest,
-                                    onClick = { selected = dest },
-                                    icon = { Icon(dest.icon, contentDescription = dest.label) },
-                                    label = { Text(dest.label) }
-                                )
+                inViewer -> CardDetailScreen(
+                    cardId = viewerCardId,
+                    onBack = { viewerOpen = false }
+                )
+                inTrash -> TrashScreen(onBack = { trashOpen = false })
+                else -> Row(Modifier.fillMaxSize()) {
+                    // 沉浸式时隐藏导航栏，实现真·全屏（不重建计时页状态）
+                    androidx.compose.animation.AnimatedVisibility(visible = !immersive) {
+                        Column {
+                            NavigationRail {
+                                // 顶部：考研倒计时
+                                CountdownHeader()
+                                Spacer(Modifier.weight(1f))
+                                Destination.entries.forEach { dest ->
+                                    NavigationRailItem(
+                                        selected = selected == dest,
+                                        onClick = { selected = dest },
+                                        icon = { Icon(dest.icon, contentDescription = dest.label) },
+                                        label = { Text(dest.label) }
+                                    )
+                                }
+                                Spacer(Modifier.weight(1f))
                             }
-                            Spacer(Modifier.weight(1f))
                         }
                     }
-                }
-                if (!immersive) VerticalDivider()
-                // 内容区（目的地切换转场：fade + 自下浮入）
-                AnimatedContent(
-                    targetState = selected,
-                    transitionSpec = {
-                        (fadeIn(Motion.enter()) + slideInVertically(Motion.enter()) { it / 24 }) togetherWith
-                            fadeOut(Motion.exit())
-                    },
-                    label = "destination",
-                    modifier = Modifier.weight(1f)
-                ) { dest ->
-                    when (dest) {
-                        Destination.Board -> BoardScreen(
-                            onStartPomodoro = { task ->
-                                timerViewModel.startForTask(task.id)
-                                selected = Destination.Timer
-                            }
-                        )
-                        Destination.Timer -> TimerScreen(
-                            viewModel = timerViewModel
-                        )
-                        Destination.Review -> ReviewScreen()
-                        Destination.Cards -> CardsScreen(
-                            onEditCard = { id ->
-                                viewerCardId = id
-                                viewerOpen = true
-                            },
-                            onOpenCard = { id ->
-                                viewerCardId = id
-                                viewerOpen = true
-                            },
-                            onOpenTrash = { trashOpen = true }
-                        )
-                        Destination.Stats -> StatsScreen()
-                        Destination.Settings -> SettingsScreen()
+                    if (!immersive) VerticalDivider()
+                    // 内容区（目的地切换转场：fade + 自下浮入）
+                    AnimatedContent(
+                        targetState = selected,
+                        transitionSpec = {
+                            (fadeIn(Motion.enter()) + slideInVertically(Motion.enter()) { it / 24 }) togetherWith
+                                fadeOut(Motion.exit())
+                        },
+                        label = "destination",
+                        modifier = Modifier.weight(1f)
+                    ) { dest ->
+                        when (dest) {
+                            Destination.Board -> BoardScreen(
+                                onStartPomodoro = { task ->
+                                    timerViewModel.startForTask(task.id)
+                                    selected = Destination.Timer
+                                }
+                            )
+                            Destination.Timer -> TimerScreen(
+                                viewModel = timerViewModel
+                            )
+                            Destination.Review -> ReviewScreen()
+                            Destination.Cards -> CardsScreen(
+                                onEditCard = { id ->
+                                    viewerCardId = id
+                                    viewerOpen = true
+                                },
+                                onOpenCard = { id ->
+                                    viewerCardId = id
+                                    viewerOpen = true
+                                },
+                                onOpenTrash = { trashOpen = true }
+                            )
+                            Destination.Stats -> StatsScreen()
+                            Destination.Settings -> SettingsScreen()
+                        }
                     }
                 }
             }
         }
+
+        // 番茄钟阶段完成全屏提醒（KMS v1.2 同期改进：结束更醒目）——始终位于最上层
+        PhaseCompletionOverlay(
+            timerViewModel = timerViewModel,
+            visible = !viewerOpen && !trashOpen
+        )
     }
 }
