@@ -12,7 +12,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,7 +109,7 @@ private val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault(
 
 /**
  * 卡片详情（KMS v1.2）：阅读视图（MD+LaTeX 全渲染）↔ 编辑视图（工具栏 + 分栏预览）。
- * 1.5s 防抖自动保存，退出即保存；新建卡片先选模板。
+ * 1.5s 防抖自动保存，退出即保存；新建卡片直接进入空白 Markdown 书写。
  */
 @Composable
 fun CardDetailScreen(
@@ -135,10 +134,8 @@ fun CardDetailScreen(
     var tags by remember { mutableStateOf(listOf<String>()) }
     var tagInput by remember { mutableStateOf("") }
 
-    var showTemplateDialog by remember { mutableStateOf(cardId == null) }
     var showPreview by remember { mutableStateOf(false) }
     var formulaMenu by remember { mutableStateOf(false) }
-    var templateMenu by remember { mutableStateOf(false) }
     var imageSizeMenu by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     var viewerImages by remember { mutableStateOf(listOf<File>()) }
@@ -248,17 +245,6 @@ fun CardDetailScreen(
         remember(id) { CardTextUtils.cardDirFor(context.filesDir, id) }
     }
 
-    // ---- 新建模板选择 ----
-    if (showTemplateDialog && initialized) {
-        TemplatePickerDialog(
-            onPick = { template ->
-                content = TextFieldValue(template)
-                showTemplateDialog = false
-            },
-            onDismiss = { showTemplateDialog = false }
-        )
-    }
-
     Box(Modifier.fillMaxSize()) {
         when (mode) {
             DetailMode.READ -> ReadView(
@@ -317,10 +303,6 @@ fun CardDetailScreen(
                 formulaMenu = formulaMenu,
                 onFormulaDismiss = { formulaMenu = false },
                 onInsertFormula = { snippet -> insertAtCursor({ content = it }, content, "\$\$$snippet\$\$") },
-                onTemplateMenu = { templateMenu = true },
-                templateMenu = templateMenu,
-                onTemplateDismiss = { templateMenu = false },
-                onInsertTemplate = { template -> content = TextFieldValue(template) },
                 onInsertToolbar = { text, cursorBack -> insertAtCursor({ content = it }, content, text, cursorBack) },
                 onLineStartInsert = { prefix -> insertAtLineStart({ content = it }, content, prefix) },
                 onWrapSelection = { wrap -> wrapSelection({ content = it }, content, wrap) },
@@ -515,10 +497,6 @@ private fun EditView(
     formulaMenu: Boolean,
     onFormulaDismiss: () -> Unit,
     onInsertFormula: (String) -> Unit,
-    onTemplateMenu: () -> Unit,
-    templateMenu: Boolean,
-    onTemplateDismiss: () -> Unit,
-    onInsertTemplate: (String) -> Unit,
     onInsertToolbar: (String, Int) -> Unit,
     onLineStartInsert: (String) -> Unit,
     onWrapSelection: (Pair<String, String>) -> Unit,
@@ -607,20 +585,6 @@ private fun EditView(
                                     onClick = {
                                         onFormulaDismiss()
                                         onInsertFormula(snippet)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Box {
-                        ToolIcon(Icons.Outlined.Edit, "模板") { onTemplateMenu() }
-                        DropdownMenu(expanded = templateMenu, onDismissRequest = onTemplateDismiss) {
-                            CardTextUtils.TEMPLATES.forEach { (name, body) ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        onTemplateDismiss()
-                                        onInsertTemplate(body)
                                     }
                                 )
                             }
@@ -880,40 +844,6 @@ fun TagChip(name: String) {
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
-}
-
-@Composable
-private fun TemplatePickerDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择模板") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "从模板开始更快成文；也可选择空白自由书写。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                CardTextUtils.TEMPLATES.forEach { (name, body) ->
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(body) }
-                    ) {
-                        Text(
-                            name,
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {}
-    )
 }
 
 // ---- 插入辅助（纯函数式更新 TextFieldValue）----

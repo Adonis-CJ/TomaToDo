@@ -4,7 +4,7 @@ import java.io.File
 
 /**
  * 卡片 Markdown 文本处理（KMS v1.2，纯函数便于单测）：
- * 标题/摘要派生、问/答面拆分、渲染预处理（图片路径与单美元公式）、新建模板与公式快捷片。
+ * 标题/摘要派生、问/答面拆分、渲染预处理（图片路径与单美元公式）、公式快捷片。
  */
 object CardTextUtils {
 
@@ -42,14 +42,6 @@ object CardTextUtils {
     /** 按文档顺序抽取全部图片引用目标（含尺寸令牌，由调用方按需剥离） */
     fun imageTargets(md: String): List<String> =
         Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").findAll(md).map { it.groupValues[1] }.toList()
-
-    /** 新建模板（408 场景）：错题模板演示 `---` 问/答面约定 */
-    val TEMPLATES: List<Pair<String, String>> = listOf(
-        "空白" to "",
-        "知识点" to "# 标题\n\n## 定义\n\n## 性质\n\n## 例题\n\n## 易错点\n",
-        "错题" to "# 题目（把题干写在这里）\n\n---\n\n## 正解\n\n## 错因\n\n## 关联知识点\n",
-        "数学结论" to "# 结论\n\n\$\$\n\n\$\$\n\n## 证明\n\n## 使用条件\n\n## 反例\n"
-    )
 
     /** LaTeX 常用结构快捷片（插入为行内公式，光标停在首个占位） */
     val FORMULA_SNIPPETS: List<Pair<String, String>> = listOf(
