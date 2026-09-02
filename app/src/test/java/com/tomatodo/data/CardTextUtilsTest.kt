@@ -82,4 +82,33 @@ class CardTextUtilsTest {
         assertTrue(out.contains(File(base, "assets/x.jpg").absolutePath))
         assertTrue(!out.contains("#"))
     }
+
+    // ---- LaTeX 转义契约（v1.6 §1：行内解析已开启，依赖单美元→双美元预处理）----
+
+    @Test
+    fun `渲染预处理 - 行内单美元转双美元`() {
+        // JLatexMath 行内处理器只认 `$$...$$`，单个 `$x$` 必须被抬升，否则以源码呈现
+        val out = CardTextUtils.prepareForRender("质能方程 \$E=mc^2\$ 成立", null)
+        assertTrue(out.contains("\$\$E=mc^2\$\$"))
+    }
+
+    @Test
+    fun `渲染预处理 - 已是双美元的块级不被叠加`() {
+        val out = CardTextUtils.prepareForRender("\$\$\nE=mc^2\n\$\$", null)
+        assertTrue(!out.contains("\$\$\$\$"))
+        assertTrue(out.contains("\$\$"))
+    }
+
+    @Test
+    fun `渲染预处理 - 围栏代码块内美元不转义`() {
+        val out = CardTextUtils.prepareForRender("```\n\$a\$\n```", null)
+        assertTrue(out.contains("\$a\$"))
+        assertTrue(!out.contains("\$\$a\$\$"))
+    }
+
+    @Test
+    fun `渲染预处理 - 反斜杠转义的美元不视为公式`() {
+        val out = CardTextUtils.prepareForRender("价格 \\\$5 起", null)
+        assertTrue(out.contains("\\\$5"))
+    }
 }
