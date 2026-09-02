@@ -2,9 +2,7 @@ package com.tomatodo.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -41,14 +39,12 @@ object Motion {
         stiffness = Spring.StiffnessMediumLow
     )
 
-    // 翻页钟（v1.4）：两段分瓣翻转——上瓣加速离位、下瓣减速落位，中缝交接瞬时最快
-    const val DURATION_FLIP_HALF = 210
-    val EaseFlipDown: Easing = FastOutLinearInEasing
-    val EaseFlipLand: Easing = LinearOutSlowInEasing
+    // 时钟数字过渡（v1.6）：取消分瓣翻页，改「淡出 → 换值 → 淡入」，单值可见杜绝重影
+    const val DURATION_FLIP_FADE = 140
 
-    fun <T> flipDown() = tween<T>(DURATION_FLIP_HALF, easing = EaseFlipDown)
+    fun <T> flipFadeOut() = tween<T>(DURATION_FLIP_FADE, easing = EaseExit)
 
-    fun <T> flipLand() = tween<T>(DURATION_FLIP_HALF, easing = EaseFlipLand)
+    fun <T> flipFadeIn() = tween<T>(DURATION_FLIP_FADE, easing = EaseEnter)
 
     // 列表入场阶梯延迟（每项 +35ms，封顶 8 项防长尾）
     fun staggerDelay(index: Int): Int = index.coerceAtMost(8) * 35
